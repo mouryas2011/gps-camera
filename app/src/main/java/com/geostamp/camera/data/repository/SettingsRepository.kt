@@ -20,7 +20,7 @@ class SettingsRepository(context: Context) {
 
     private fun loadConfig(): StampConfig {
         val positionStr = prefs.getString("stamp_position", StampPosition.BOTTOM_LEFT.name)
-        val styleStr = prefs.getString("stamp_style", StampStyle.FROSTED_GLASS.name)
+        val styleStr = prefs.getString("stamp_style", StampStyle.CLASSIC_MAP_BADGE.name)
         val coordFormatStr = prefs.getString("coord_format", CoordinateFormat.DECIMAL.name)
 
         val position = try {
@@ -30,9 +30,9 @@ class SettingsRepository(context: Context) {
         }
 
         val style = try {
-            StampStyle.valueOf(styleStr ?: StampStyle.FROSTED_GLASS.name)
+            StampStyle.valueOf(styleStr ?: StampStyle.CLASSIC_MAP_BADGE.name)
         } catch (_: Exception) {
-            StampStyle.FROSTED_GLASS
+            StampStyle.CLASSIC_MAP_BADGE
         }
 
         val coordFormat = try {
@@ -49,10 +49,16 @@ class SettingsRepository(context: Context) {
             showAddress = prefs.getBoolean("show_address", true),
             showAccuracy = prefs.getBoolean("show_accuracy", true),
             showAltitude = prefs.getBoolean("show_altitude", true),
+            showMapSnapshot = prefs.getBoolean("show_map_snapshot", true),
+            showPlusCode = prefs.getBoolean("show_plus_code", true),
+            showWeather = prefs.getBoolean("show_weather", true),
+            showCompass = prefs.getBoolean("show_compass", true),
+            showSensors = prefs.getBoolean("show_sensors", true),
             showCustomTitle = prefs.getBoolean("show_custom_title", true),
             customTitle = prefs.getString("custom_title", "GPS Map Camera") ?: "GPS Map Camera",
+            personName = prefs.getString("person_name", "-") ?: "-",
             coordinateFormat = coordFormat,
-            dateTimePattern = prefs.getString("datetime_pattern", "yyyy-MM-dd HH:mm:ss") ?: "yyyy-MM-dd HH:mm:ss"
+            dateTimePattern = prefs.getString("datetime_pattern", "EEEE, dd/MM/yyyy hh:mm a 'GMT' Z") ?: "EEEE, dd/MM/yyyy hh:mm a 'GMT' Z"
         )
     }
 
@@ -65,8 +71,14 @@ class SettingsRepository(context: Context) {
             putBoolean("show_address", config.showAddress)
             putBoolean("show_accuracy", config.showAccuracy)
             putBoolean("show_altitude", config.showAltitude)
+            putBoolean("show_map_snapshot", config.showMapSnapshot)
+            putBoolean("show_plus_code", config.showPlusCode)
+            putBoolean("show_weather", config.showWeather)
+            putBoolean("show_compass", config.showCompass)
+            putBoolean("show_sensors", config.showSensors)
             putBoolean("show_custom_title", config.showCustomTitle)
             putString("custom_title", config.customTitle)
+            putString("person_name", config.personName)
             putString("coord_format", config.coordinateFormat.name)
             putString("datetime_pattern", config.dateTimePattern)
             apply()

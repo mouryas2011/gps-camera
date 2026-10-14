@@ -153,6 +153,12 @@ fun SettingsScreen(
             SectionTitle("STAMP VISUAL STYLE")
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StyleSelectorItem(
+                    title = "Classic GPS Map Camera",
+                    desc = "Square satellite map badge with red pin, Plus Code, weather & sensors",
+                    isSelected = config.style == StampStyle.CLASSIC_MAP_BADGE
+                ) { update(config.copy(style = StampStyle.CLASSIC_MAP_BADGE)) }
+
+                StyleSelectorItem(
                     title = "Frosted Glass Badge",
                     desc = "Translucent dark glass card with cyan accent border",
                     isSelected = config.style == StampStyle.FROSTED_GLASS
@@ -228,6 +234,30 @@ fun SettingsScreen(
                 subtitle = "Street, locality, city, and country",
                 checked = config.showAddress
             ) { update(config.copy(showAddress = it)) }
+
+            SettingToggleRow(
+                title = "Plus Code (Open Location Code)",
+                subtitle = "Google Plus Code (e.g. 7MJ49PFP+J2)",
+                checked = config.showPlusCode
+            ) { update(config.copy(showPlusCode = it)) }
+
+            SettingToggleRow(
+                title = "Live Weather & Temp",
+                subtitle = "Temperature, weather icon, humidity & wind speed",
+                checked = config.showWeather
+            ) { update(config.copy(showWeather = it)) }
+
+            SettingToggleRow(
+                title = "Sensors (Compass & Pressure)",
+                subtitle = "Azimuth bearing, pressure (hPa) & magnetic field (µT)",
+                checked = config.showSensors
+            ) { update(config.copy(showSensors = it)) }
+
+            SettingToggleRow(
+                title = "Square Map Tile Badge",
+                subtitle = "Overlay live satellite mini-map on watermark",
+                checked = config.showMapSnapshot
+            ) { update(config.copy(showMapSnapshot = it)) }
 
             SettingToggleRow(
                 title = "Location Accuracy",
@@ -500,6 +530,11 @@ fun LiveStampPreviewCard(config: StampConfig) {
                 .align(alignment)
                 .then(
                     when (config.style) {
+                        StampStyle.CLASSIC_MAP_BADGE -> Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xE00A0F16))
+                            .border(1.dp, Color(0x6000E5FF), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
                         StampStyle.FROSTED_GLASS -> Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(Color(0xD010151E))

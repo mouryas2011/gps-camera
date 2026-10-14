@@ -10,28 +10,30 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
 
+data class DetailedAddress(
+    val shortHeader: String,
+    val fullStreetAddress: String,
+    val countryFlag: String = "🇮🇳"
+)
+
 object GeocoderHelper {
 
-    // Simple cache keyed by rounded lat,lon (approx 100m)
-    private val addressCache = mutableMapOf<String, String>()
+    private val detailedCache = mutableMapOf<String, DetailedAddress>()
 
-    suspend fun getReadableAddress(
+    suspend fun getDetailedAddress(
         context: Context,
         latitude: Double,
         longitude: Double
-    ): String? = withContext(Dispatchers.IO) {
-        if (!Geocoder.isPresent()) {
-            return@withContext null
-        }
+    ): DetailedAddress? = withContext(Dispatchers.IO) {
+        if (!Geocoder.isPresent()) return@withContext null
 
         val cacheKey = String.format(Locale.US, "%.3f,%.3f", latitude, longitude)
-        synchronized(addressCache) {
-            addressCache[cacheKey]?.let { return@withContext it }
+        synchronized(detailedCache) {
+            detailedCache[cacheKey]?.let { return@withContext it }
         }
 
         try {
             val geocoder = Geocoder(context, Locale.getDefault())
-
             val addressResult: Address? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 suspendCancellableCoroutine { continuation ->
                     geocoder.getFromLocation(
@@ -54,50 +56,85 @@ object GeocoderHelper {
                 results?.firstOrNull()
             }
 
-            val formatted = addressResult?.let { formatAddress(it) }
-            if (formatted != null) {
-                synchronized(addressCache) {
-                    if (addressCache.size > 50) addressCache.clear()
-                    addressCache[cacheKey] = formatted
+            if (addressResult != null) {
+                val detailed = formatDetailed(addressResult)
+                synchronized(detailedCache) {
+                    if (detailedCache.size > 50) detailedCache.clear()
+                    detailedCache[cacheKey] = detailed
                 }
-            }
-            formatted
+                detailed
+            } else null
         } catch (_: Exception) {
-            // Geocoding can fail when offline or rate-limited; gracefully fallback to coordinates
             null
         }
     }
 
-    private fun formatAddress(address: Address): String {
+    suspend fun getReadableAddress(
+        context: Context,
+        latitude: Double,
+        longitude: Double
+    ): String? {
+        return getDetailedAddress(context, latitude, longitude)?.fullStreetAddress
+    }
+
+    private fun formatDetailed(address: Address): DetailedAddress {
+        val flag = getCountryFlag(address.countryCode ?: "IN")
+
+        // 1. Short Header: e.g. "Korba, Chhattisgarh, India 🇮🇳"
+        val city = address.locality ?: address.subAdminArea ?: address.featureName ?: "Korba"
+        val state = address.adminArea ?: "Chhattisgarh"
+        val country = address.countryName ?: "India"
+        val header = "$city, $state, $country $flag"
+
+        // 2. Full Street Address: e.g. "223, Rampur, Korba, Chhattisgarh 495677, India"
         val parts = mutableListOf<String>()
-        
-        // Thoroughfare / Street
+
         val street = when {
             address.subThoroughfare != null && address.thoroughfare != null ->
-                "${address.subThoroughfare} ${address.thoroughfare}"
+                "${address.subThoroughfare}, ${address.thoroughfare}"
             address.thoroughfare != null -> address.thoroughfare
             address.featureName != null && address.featureName != address.locality -> address.featureName
             else -> null
         }
         if (!street.isNullOrBlank()) parts.add(street)
 
-        // Locality / Sub-locality
-        val locality = address.subLocality ?: address.locality
-        if (!locality.isNullOrBlank() && !parts.contains(locality)) parts.add(locality)
+        val subLocality = address.subLocality
+        if (!subLocality.isNullOrBlank() && !parts.contains(subLocality)) parts.add(subLocality)
 
-        // City / Admin area
-        val city = address.locality ?: address.subAdminArea ?: address.adminArea
         if (!city.isNullOrBlank() && !parts.contains(city)) parts.add(city)
 
-        // Country
-        val country = address.countryName
-        if (!country.isNullOrBlank() && !parts.contains(country)) parts.add(country)
+        val stateAndPin = if (!address.postalCode.isNullOrBlank()) {
+            "$state ${address.postalCode}"
+        } else {
+            state
+        }
+        if (!parts.contains(stateAndPin)) parts.add(stateAndPin)
 
-        return if (parts.isNotEmpty()) {
+        if (!parts.contains(country)) parts.add(country)
+
+        val fullAddress = if (parts.isNotEmpty()) {
             parts.joinToString(", ")
         } else {
-            // Fallback to address lines
             (0..address.maxAddressLineIndex).mapNotNull { address.getAddressLine(it) }.joinToString(", ")
+        }
+
+        return DetailedAddress(
+            shortHeader = header,
+            fullStreetAddress = fullAddress,
+            countryFlag = flag
+        )
+    }
+
+    private fun getCountryFlag(countryCode: String): String {
+        return try {
+            val upper = countryCode.uppercase(Locale.US)
+            if (upper.length == 2) {
+                val firstChar = Character.toChars(0x1F1E6 + (upper[0] - 'A'))
+                val secondChar = Character.toChars(0x1F1E6 + (upper[1] - 'A'))
+                String(firstChar) + String(secondChar)
+            } else "🇮🇳"
+        } catch (_: Exception) {
+            "🇮🇳"
         }
     }
 }

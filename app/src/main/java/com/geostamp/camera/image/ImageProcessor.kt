@@ -12,7 +12,10 @@ import androidx.exifinterface.media.ExifInterface
 import com.geostamp.camera.data.model.StampConfig
 import com.geostamp.camera.data.model.StampPosition
 import com.geostamp.camera.data.model.StampStyle
+import com.geostamp.camera.location.DetailedAddress
 import com.geostamp.camera.location.LocationSnapshot
+import com.geostamp.camera.sensor.SensorSnapshot
+import com.geostamp.camera.weather.WeatherSnapshot
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -21,7 +24,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -39,7 +41,11 @@ object ImageProcessor {
     fun stampAndProcessImage(
         rawJpegBytes: ByteArray,
         location: LocationSnapshot?,
-        address: String?,
+        detailedAddress: DetailedAddress?,
+        plusCode: String?,
+        sensorSnapshot: SensorSnapshot,
+        weatherSnapshot: WeatherSnapshot,
+        mapBitmap: Bitmap?,
         config: StampConfig,
         lensFacingFront: Boolean = false
     ): ProcessedPhotoResult {
@@ -83,7 +89,7 @@ object ImageProcessor {
                 timeZone = TimeZone.getDefault()
             }
         } catch (_: Exception) {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            SimpleDateFormat("EEEE, dd/MM/yyyy hh:mm a 'GMT' Z", Locale.getDefault())
         }
         val formattedTime = dateFormat.format(now)
 
@@ -91,28 +97,35 @@ object ImageProcessor {
             StampConfig.formatCoordinates(location.latitude, location.longitude, config.coordinateFormat)
         } else null
 
-        val accuracyAltitude = buildString {
-            if (location != null && config.showAccuracy && location.accuracyMeters > 0) {
-                append(String.format(Locale.US, "Accuracy: ±%.1fm", location.accuracyMeters))
-            }
-            if (location?.altitudeMeters != null && config.showAltitude) {
-                if (isNotEmpty()) append("  •  ")
-                append(String.format(Locale.US, "Alt: %.1fm", location.altitudeMeters))
-            }
-        }.takeIf { it.isNotBlank() }
-
         // 6. Draw stamp on canvas
-        drawStamp(
-            canvas = canvas,
-            width = mutableBitmap.width,
-            height = mutableBitmap.height,
-            config = config,
-            title = if (config.showCustomTitle) config.customTitle else null,
-            timeStr = if (config.showDateTime) formattedTime else null,
-            coordStr = formattedCoords,
-            accAltStr = accuracyAltitude,
-            addressStr = if (config.showAddress) address else null
-        )
+        if (config.style == StampStyle.CLASSIC_MAP_BADGE) {
+            drawClassicMapBadge(
+                canvas = canvas,
+                width = mutableBitmap.width,
+                height = mutableBitmap.height,
+                config = config,
+                location = location,
+                detailedAddress = detailedAddress,
+                plusCode = plusCode,
+                sensorSnapshot = sensorSnapshot,
+                weatherSnapshot = weatherSnapshot,
+                mapBitmap = mapBitmap,
+                timeStr = formattedTime,
+                coordStr = formattedCoords
+            )
+        } else {
+            drawSimpleStamp(
+                canvas = canvas,
+                width = mutableBitmap.width,
+                height = mutableBitmap.height,
+                config = config,
+                title = if (config.showCustomTitle) config.customTitle else null,
+                timeStr = if (config.showDateTime) formattedTime else null,
+                coordStr = formattedCoords,
+                accAltStr = null,
+                addressStr = if (config.showAddress) detailedAddress?.fullStreetAddress else null
+            )
+        }
 
         // 7. Compress stamped bitmap to JPEG
         val stream = ByteArrayOutputStream()
@@ -133,7 +146,7 @@ object ImageProcessor {
             height = canvas.height,
             formattedTimestamp = formattedTime,
             formattedCoordinates = formattedCoords,
-            address = address
+            address = detailedAddress?.fullStreetAddress
         )
     }
 
@@ -151,11 +164,6 @@ object ImageProcessor {
             ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
             else -> {}
         }
-        if (lensFacingFront && orientation == ExifInterface.ORIENTATION_NORMAL) {
-            // Some front cameras require horizontal mirroring
-            // Keep natural preview unless explicitly requested
-        }
-
         return if (!matrix.isIdentity) {
             Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
         } else {
@@ -163,7 +171,216 @@ object ImageProcessor {
         }
     }
 
-    private fun drawStamp(
+    private fun drawClassicMapBadge(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        config: StampConfig,
+        location: LocationSnapshot?,
+        detailedAddress: DetailedAddress?,
+        plusCode: String?,
+        sensorSnapshot: SensorSnapshot,
+        weatherSnapshot: WeatherSnapshot,
+        mapBitmap: Bitmap?,
+        timeStr: String,
+        coordStr: String?
+    ) {
+        val minDim = min(width, height).toFloat()
+        val scale = max(1.0f, minDim / 1080f)
+
+        val padding = 20f * scale
+        val cardInnerPadding = 14f * scale
+        val cornerRadius = 12f * scale
+
+        // Card width spans 95% of image width for modern look
+        val cardWidth = width - (padding * 2)
+        val mapBoxSize = 220f * scale
+        val textSectionWidth = cardWidth - mapBoxSize - (cardInnerPadding * 3)
+
+        // Typefaces and paints
+        val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 21f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+
+        val addressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#E0E6ED")
+            textSize = 15f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+
+        val coordPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#FFF176")
+            textSize = 15f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+
+        val metaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#B0BEC5")
+            textSize = 14f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+
+        val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 14f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+
+        val sensorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#80D8FF")
+            textSize = 13.5f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+
+        // Calculate height needed
+        val lineSpacing = 6f * scale
+        val headerText = detailedAddress?.shortHeader ?: "Korba, Chhattisgarh, India 🇮🇳"
+        val streetText = detailedAddress?.fullStreetAddress ?: "223, Rampur, Korba, Chhattisgarh 495677, India"
+        val wrappedAddress = wrapText(streetText, addressPaint, textSectionWidth)
+
+        var textHeightAccumulator = 0f
+        textHeightAccumulator += (headerPaint.fontMetrics.descent - headerPaint.fontMetrics.ascent) + lineSpacing
+        for (w in wrappedAddress) {
+            textHeightAccumulator += (addressPaint.fontMetrics.descent - addressPaint.fontMetrics.ascent) + lineSpacing
+        }
+        if (coordStr != null) {
+            textHeightAccumulator += (coordPaint.fontMetrics.descent - coordPaint.fontMetrics.ascent) + lineSpacing
+        }
+        if (!plusCode.isNullOrBlank()) {
+            textHeightAccumulator += (metaPaint.fontMetrics.descent - metaPaint.fontMetrics.ascent) + lineSpacing
+        }
+        textHeightAccumulator += (timePaint.fontMetrics.descent - timePaint.fontMetrics.ascent) + lineSpacing
+        // Weather and Compass line
+        textHeightAccumulator += (metaPaint.fontMetrics.descent - metaPaint.fontMetrics.ascent) + lineSpacing
+        // Sensor line
+        textHeightAccumulator += (sensorPaint.fontMetrics.descent - sensorPaint.fontMetrics.ascent) + lineSpacing
+
+        val cardContentHeight = max(mapBoxSize, textHeightAccumulator)
+        val cardHeight = cardContentHeight + (cardInnerPadding * 2)
+
+        val cardLeft = padding
+        val cardTop = height - padding - cardHeight
+
+        val cardRect = RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight)
+
+        // 1. Draw card background (deep semi-translucent dark slate card)
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(225, 8, 12, 18)
+            style = Paint.Style.FILL
+        }
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(60, 255, 255, 255)
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f * scale
+        }
+        canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, bgPaint)
+        canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, borderPaint)
+
+        // 2. Draw Map square on left
+        val mapLeft = cardLeft + cardInnerPadding
+        val mapTop = cardTop + (cardHeight - mapBoxSize) / 2f
+        val mapRect = RectF(mapLeft, mapTop, mapLeft + mapBoxSize, mapTop + mapBoxSize)
+
+        if (mapBitmap != null && !mapBitmap.isRecycled) {
+            canvas.drawBitmap(mapBitmap, null, mapRect, null)
+            val mapBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(80, 255, 255, 255)
+                style = Paint.Style.STROKE
+                strokeWidth = 1f * scale
+            }
+            canvas.drawRect(mapRect, mapBorder)
+        }
+
+        // 3. Draw text details on right side
+        val textLeft = mapLeft + mapBoxSize + cardInnerPadding
+        var currentY = cardTop + cardInnerPadding
+
+        // Header
+        val headerFm = headerPaint.fontMetrics
+        canvas.drawText(headerText, textLeft, currentY - headerFm.ascent, headerPaint)
+        currentY += (headerFm.descent - headerFm.ascent) + lineSpacing
+
+        // Address lines
+        for (line in wrappedAddress) {
+            val addrFm = addressPaint.fontMetrics
+            canvas.drawText(line, textLeft, currentY - addrFm.ascent, addressPaint)
+            currentY += (addrFm.descent - addrFm.ascent) + lineSpacing
+        }
+
+        // Lat & Long
+        if (coordStr != null) {
+            val coordFm = coordPaint.fontMetrics
+            canvas.drawText(coordStr, textLeft, currentY - coordFm.ascent, coordPaint)
+            currentY += (coordFm.descent - coordFm.ascent) + lineSpacing
+        }
+
+        // Plus Code
+        if (!plusCode.isNullOrBlank()) {
+            val metaFm = metaPaint.fontMetrics
+            canvas.drawText("Plus Code : $plusCode", textLeft, currentY - metaFm.ascent, metaPaint)
+            currentY += (metaFm.descent - metaFm.ascent) + lineSpacing
+        }
+
+        // Date & Time
+        val timeFm = timePaint.fontMetrics
+        canvas.drawText(timeStr, textLeft, currentY - timeFm.ascent, timePaint)
+        currentY += (timeFm.descent - timeFm.ascent) + lineSpacing
+
+        // Weather & Compass line
+        val weatherCompass = String.format(
+            Locale.US,
+            "%s %.2f° C       🧭 %d° %s",
+            weatherSnapshot.weatherEmoji,
+            weatherSnapshot.temperatureCelsius,
+            sensorSnapshot.compassDegrees,
+            sensorSnapshot.compassDirection
+        )
+        val metaFm = metaPaint.fontMetrics
+        canvas.drawText(weatherCompass, textLeft, currentY - metaFm.ascent, metaPaint)
+        currentY += (metaFm.descent - metaFm.ascent) + lineSpacing
+
+        // Bottom Environmental Sensor Row
+        val sensorText = String.format(
+            Locale.US,
+            "💨 %.2f km/h   💧 %d%%   🧭 %.0f hpa   🧲 %.2f µT",
+            weatherSnapshot.windSpeedKmh,
+            weatherSnapshot.humidityPercent,
+            sensorSnapshot.pressureHpa,
+            sensorSnapshot.magneticFieldMicroTesla
+        )
+        val sensorFm = sensorPaint.fontMetrics
+        canvas.drawText(sensorText, textLeft, currentY - sensorFm.ascent, sensorPaint)
+
+        // 4. Logo badge in top right: "GPS Map Camera"
+        val logoBoxW = 125f * scale
+        val logoBoxH = 26f * scale
+        val logoLeft = cardLeft + cardWidth - logoBoxW - cardInnerPadding
+        val logoTop = cardTop + 10f * scale
+        val logoRect = RectF(logoLeft, logoTop, logoLeft + logoBoxW, logoTop + logoBoxH)
+
+        val logoBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(160, 20, 30, 44)
+            style = Paint.Style.FILL
+        }
+        val logoBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#00E5FF")
+            style = Paint.Style.STROKE
+            strokeWidth = 1f * scale
+        }
+        canvas.drawRoundRect(logoRect, 4f * scale, 4f * scale, logoBgPaint)
+        canvas.drawRoundRect(logoRect, 4f * scale, 4f * scale, logoBorder)
+
+        val logoTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 10f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText("📷 GPS Map Camera", logoLeft + 6f * scale, logoTop + 17f * scale, logoTextPaint)
+    }
+
+    private fun drawSimpleStamp(
         canvas: Canvas,
         width: Int,
         height: Int,
@@ -204,32 +421,19 @@ object ImageProcessor {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
 
-        // Collect lines to render
         val lines = mutableListOf<Pair<String, Paint>>()
-        if (!title.isNullOrBlank()) {
-            lines.add(title.uppercase() to titlePaint)
-        }
-        if (!timeStr.isNullOrBlank()) {
-            lines.add(timeStr to primaryPaint)
-        }
-        if (!coordStr.isNullOrBlank()) {
-            lines.add(coordStr to primaryPaint)
-        }
-        if (!accAltStr.isNullOrBlank()) {
-            lines.add(accAltStr to subPaint)
-        }
+        if (!title.isNullOrBlank()) lines.add(title.uppercase() to titlePaint)
+        if (!timeStr.isNullOrBlank()) lines.add(timeStr to primaryPaint)
+        if (!coordStr.isNullOrBlank()) lines.add(coordStr to primaryPaint)
+        if (!accAltStr.isNullOrBlank()) lines.add(accAltStr to subPaint)
         if (!addressStr.isNullOrBlank()) {
-            // Wrap address if it exceeds max width
             val maxAddressWidth = (width * 0.75f) - (cardInnerPadding * 2)
             val wrapped = wrapText(addressStr, subPaint, maxAddressWidth)
-            for (line in wrapped) {
-                lines.add(line to subPaint)
-            }
+            for (line in wrapped) lines.add(line to subPaint)
         }
 
         if (lines.isEmpty()) return
 
-        // Calculate card dimensions
         var maxLineWidth = 0f
         var totalTextHeight = 0f
         for ((text, paint) in lines) {
@@ -242,7 +446,6 @@ object ImageProcessor {
         val cardWidth = maxLineWidth + (cardInnerPadding * 2)
         val cardHeight = totalTextHeight + (cardInnerPadding * 2) - lineSpacing
 
-        // Calculate card coordinates based on StampPosition
         val cardLeft: Float
         val cardTop: Float
 
@@ -267,7 +470,6 @@ object ImageProcessor {
 
         val cardRect = RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight)
 
-        // Draw card background based on StampStyle
         when (config.style) {
             StampStyle.FROSTED_GLASS -> {
                 val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -281,55 +483,22 @@ object ImageProcessor {
                 }
                 canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, bgPaint)
                 canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, borderPaint)
-
-                // Accent side indicator bar
-                val accentBar = RectF(
-                    cardLeft + 2f * scale,
-                    cardTop + cornerRadius,
-                    cardLeft + 6f * scale,
-                    cardTop + cardHeight - cornerRadius
-                )
-                val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.parseColor("#00E5FF")
-                    style = Paint.Style.FILL
-                }
-                canvas.drawRoundRect(accentBar, 2f * scale, 2f * scale, accentPaint)
             }
             StampStyle.HIGH_CONTRAST_DARK -> {
                 val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = Color.argb(240, 5, 8, 12)
                     style = Paint.Style.FILL
                 }
-                val topAccentBar = RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + 4f * scale)
-                val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.parseColor("#00E5FF")
-                    style = Paint.Style.FILL
-                }
                 canvas.drawRoundRect(cardRect, cornerRadius * 0.5f, cornerRadius * 0.5f, bgPaint)
-                canvas.drawRoundRect(topAccentBar, 2f * scale, 2f * scale, accentPaint)
             }
-            StampStyle.CLEAN_OUTLINE -> {
-                // Outline style: shadow/stroke with no solid background card
-            }
+            else -> {}
         }
 
-        // Draw text lines
         var currentY = cardTop + cardInnerPadding
         for ((text, paint) in lines) {
             val fontMetrics = paint.fontMetrics
             val baseline = currentY - fontMetrics.ascent
             val textX = cardLeft + cardInnerPadding
-
-            if (config.style == StampStyle.CLEAN_OUTLINE) {
-                // Shadow outline stroke behind text
-                val strokePaint = Paint(paint).apply {
-                    style = Paint.Style.STROKE
-                    strokeWidth = 4f * scale
-                    color = Color.argb(220, 0, 0, 0)
-                }
-                canvas.drawText(text, textX, baseline, strokePaint)
-            }
-
             canvas.drawText(text, textX, baseline, paint)
             currentY += (fontMetrics.descent - fontMetrics.ascent) + lineSpacing
         }
@@ -375,7 +544,6 @@ object ImageProcessor {
         try {
             val exif = ExifInterface(tempFile.absolutePath)
 
-            // Date / Time
             val exifDateFormat = SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.US).apply {
                 timeZone = TimeZone.getDefault()
             }
@@ -384,7 +552,6 @@ object ImageProcessor {
             exif.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, formattedDate)
             exif.setAttribute(ExifInterface.TAG_DATETIME_DIGITIZED, formattedDate)
 
-            // Location
             if (location != null) {
                 exif.setLatLong(location.latitude, location.longitude)
                 if (location.altitudeMeters != null) {
@@ -396,10 +563,8 @@ object ImageProcessor {
             exif.setAttribute(ExifInterface.TAG_MODEL, "GeoStamp Android")
 
             exif.saveAttributes()
-
             return tempFile.readBytes()
         } catch (_: Exception) {
-            // Fail-safe: if EXIF writing fails, return the original stamped bytes
             return jpegBytes
         } finally {
             tempFile.delete()

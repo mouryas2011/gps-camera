@@ -11,6 +11,7 @@ enum class StampPosition {
 }
 
 enum class StampStyle {
+    CLASSIC_MAP_BADGE, // Classic GPS Map Camera reference layout with Map on left and info on right
     FROSTED_GLASS,
     HIGH_CONTRAST_DARK,
     CLEAN_OUTLINE
@@ -23,16 +24,22 @@ enum class CoordinateFormat {
 
 data class StampConfig(
     val position: StampPosition = StampPosition.BOTTOM_LEFT,
-    val style: StampStyle = StampStyle.FROSTED_GLASS,
+    val style: StampStyle = StampStyle.CLASSIC_MAP_BADGE,
     val showDateTime: Boolean = true,
     val showCoordinates: Boolean = true,
     val showAddress: Boolean = true,
     val showAccuracy: Boolean = true,
     val showAltitude: Boolean = true,
+    val showMapSnapshot: Boolean = true,
+    val showPlusCode: Boolean = true,
+    val showWeather: Boolean = true,
+    val showCompass: Boolean = true,
+    val showSensors: Boolean = true,
     val showCustomTitle: Boolean = true,
     val customTitle: String = "GPS Map Camera",
+    val personName: String = "-",
     val coordinateFormat: CoordinateFormat = CoordinateFormat.DECIMAL,
-    val dateTimePattern: String = "yyyy-MM-dd HH:mm:ss"
+    val dateTimePattern: String = "EEEE, dd/MM/yyyy hh:mm a 'GMT' Z"
 ) {
     companion object {
         fun formatCoordinates(
@@ -42,15 +49,11 @@ data class StampConfig(
         ): String {
             return when (format) {
                 CoordinateFormat.DECIMAL -> {
-                    val latDir = if (latitude >= 0) "N" else "S"
-                    val lonDir = if (longitude >= 0) "E" else "W"
                     String.format(
                         Locale.US,
-                        "%.6f° %s, %.6f° %s",
-                        abs(latitude),
-                        latDir,
-                        abs(longitude),
-                        lonDir
+                        "Lat %.6f° Long %.6f°",
+                        latitude,
+                        longitude
                     )
                 }
                 CoordinateFormat.DMS -> {

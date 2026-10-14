@@ -2,6 +2,8 @@ package com.geostamp.camera.ui.camera
 
 import android.app.Application
 import android.content.Context
+import android.graphics.Bitmap
+import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -13,11 +15,18 @@ import com.geostamp.camera.data.model.CapturedPhoto
 import com.geostamp.camera.data.model.StampConfig
 import com.geostamp.camera.data.repository.SettingsRepository
 import com.geostamp.camera.image.ImageProcessor
+import com.geostamp.camera.image.MapSnapshotHelper
+import com.geostamp.camera.location.DetailedAddress
 import com.geostamp.camera.location.GeocoderHelper
 import com.geostamp.camera.location.LocationHelper
 import com.geostamp.camera.location.LocationSnapshot
 import com.geostamp.camera.location.LocationState
+import com.geostamp.camera.location.PlusCodeHelper
+import com.geostamp.camera.sensor.SensorHelper
+import com.geostamp.camera.sensor.SensorSnapshot
 import com.geostamp.camera.storage.MediaStoreHelper
+import com.geostamp.camera.weather.WeatherHelper
+import com.geostamp.camera.weather.WeatherSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,15 +35,27 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 
+enum class CameraMode {
+    PHOTO,
+    VIDEO
+}
+
 data class CameraUiState(
     val lensFacing: Int = CameraSelector.LENS_FACING_BACK,
     val flashMode: Int = ImageCapture.FLASH_MODE_OFF,
     val zoomRatio: Float = 1.0f,
+    val exposureProgress: Float = 0.5f,
     val isCapturing: Boolean = false,
     val isSaving: Boolean = false,
     val lastPhoto: CapturedPhoto? = null,
     val locationState: LocationState = LocationState.Idle,
+    val detailedAddress: DetailedAddress? = null,
     val currentAddress: String? = null,
+    val plusCode: String? = null,
+    val sensorSnapshot: SensorSnapshot = SensorSnapshot(),
+    val weatherSnapshot: WeatherSnapshot = WeatherSnapshot(),
+    val mapSnapshot: Bitmap? = null,
+    val currentMode: CameraMode = CameraMode.PHOTO,
     val infoMessage: String? = null,
     val errorMessage: String? = null
 )
@@ -43,6 +64,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     private val settingsRepository = SettingsRepository(application)
     private val locationHelper = LocationHelper(application)
+    private val sensorHelper = SensorHelper(application)
 
     private val _uiState = MutableStateFlow(CameraUiState())
     val uiState: StateFlow<CameraUiState> = _uiState.asStateFlow()
@@ -50,27 +72,51 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     val stampConfig: StateFlow<StampConfig> = settingsRepository.configFlow
 
     init {
-        // Collect location state
+        sensorHelper.start()
+
+        // 1. Collect sensors
+        viewModelScope.launch {
+            sensorHelper.snapshot.collect { sensorData ->
+                _uiState.value = _uiState.value.copy(sensorSnapshot = sensorData)
+            }
+        }
+
+        // 2. Collect location state
         viewModelScope.launch {
             locationHelper.state.collect { locState ->
                 _uiState.value = _uiState.value.copy(locationState = locState)
 
-                // If location is ready, resolve address asynchronously
+                // If location is ready, resolve address, weather, map, and plus code asynchronously
                 if (locState is LocationState.Ready) {
                     val snapshot = locState.snapshot
                     launch(Dispatchers.IO) {
-                        val address = GeocoderHelper.getReadableAddress(
+                        val plusCode = PlusCodeHelper.encode(snapshot.latitude, snapshot.longitude)
+                        val detailed = GeocoderHelper.getDetailedAddress(
                             application,
                             snapshot.latitude,
                             snapshot.longitude
                         )
-                        _uiState.value = _uiState.value.copy(currentAddress = address)
+                        val weather = WeatherHelper.getWeather(snapshot.latitude, snapshot.longitude)
+                        val heading = _uiState.value.sensorSnapshot.compassDegrees
+                        val map = MapSnapshotHelper.getMapBitmap(
+                            latitude = snapshot.latitude,
+                            longitude = snapshot.longitude,
+                            headingDegrees = heading
+                        )
+
+                        _uiState.value = _uiState.value.copy(
+                            plusCode = plusCode,
+                            detailedAddress = detailed,
+                            currentAddress = detailed?.fullStreetAddress,
+                            weatherSnapshot = weather,
+                            mapSnapshot = map
+                        )
                     }
                 }
             }
         }
 
-        // Load most recent photo for bottom thumbnail
+        // 3. Load most recent photo for bottom thumbnail
         viewModelScope.launch {
             val photos = MediaStoreHelper.getCapturedPhotos(application)
             _uiState.value = _uiState.value.copy(lastPhoto = photos.firstOrNull())
@@ -79,10 +125,12 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     fun startLocation() {
         locationHelper.startMonitoring()
+        sensorHelper.start()
     }
 
     fun stopLocation() {
         locationHelper.stopMonitoring()
+        sensorHelper.stop()
     }
 
     fun toggleLens() {
@@ -107,8 +155,32 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.value = _uiState.value.copy(zoomRatio = ratio.coerceIn(1.0f, 10.0f))
     }
 
+    fun setExposureProgress(progress: Float, cameraControl: CameraControl?) {
+        val clamped = progress.coerceIn(0f, 1f)
+        _uiState.value = _uiState.value.copy(exposureProgress = clamped)
+        // CameraX exposure compensation map from 0..1 to index range
+        try {
+            val index = ((clamped - 0.5f) * 8).toInt()
+            cameraControl?.setExposureCompensationIndex(index)
+        } catch (_: Exception) {}
+    }
+
+    fun setMode(mode: CameraMode) {
+        _uiState.value = _uiState.value.copy(currentMode = mode)
+    }
+
     fun dismissMessage() {
         _uiState.value = _uiState.value.copy(infoMessage = null, errorMessage = null)
+    }
+
+    fun updatePersonName(name: String) {
+        val current = stampConfig.value
+        settingsRepository.updateConfig(current.copy(personName = name))
+    }
+
+    fun updateCustomTitle(title: String) {
+        val current = stampConfig.value
+        settingsRepository.updateConfig(current.copy(customTitle = title))
     }
 
     fun capturePhoto(context: Context, imageCapture: ImageCapture) {
@@ -144,29 +216,42 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             buffer.get(bytes)
             imageProxy.close()
 
-            // 1. Obtain fresh location fix if possible
+            // 1. Obtain fresh high-accuracy location fix
             val freshLocation = locationHelper.getFreshFixForCapture(timeoutMillis = 3500L)
                 ?: when (val s = _uiState.value.locationState) {
                     is LocationState.Ready -> s.snapshot
                     else -> null
                 }
 
-            // 2. Resolve address
-            val address = if (freshLocation != null) {
-                GeocoderHelper.getReadableAddress(
+            // 2. Resolve detailed address & plus code
+            val detailed = if (freshLocation != null) {
+                GeocoderHelper.getDetailedAddress(
                     context,
                     freshLocation.latitude,
                     freshLocation.longitude
-                ) ?: _uiState.value.currentAddress
-            } else null
+                ) ?: _uiState.value.detailedAddress
+            } else _uiState.value.detailedAddress
 
-            // 3. Stamp image
+            val plusCode = if (freshLocation != null) {
+                PlusCodeHelper.encode(freshLocation.latitude, freshLocation.longitude)
+            } else _uiState.value.plusCode
+
+            val heading = _uiState.value.sensorSnapshot.compassDegrees
+            val mapBitmap = if (freshLocation != null) {
+                MapSnapshotHelper.getMapBitmap(freshLocation.latitude, freshLocation.longitude, heading)
+            } else _uiState.value.mapSnapshot
+
+            // 3. Stamp image with full rich data matching reference
             val isFront = _uiState.value.lensFacing == CameraSelector.LENS_FACING_FRONT
             val processed = withContext(Dispatchers.Default) {
                 ImageProcessor.stampAndProcessImage(
                     rawJpegBytes = bytes,
                     location = freshLocation,
-                    address = address,
+                    detailedAddress = detailed,
+                    plusCode = plusCode,
+                    sensorSnapshot = _uiState.value.sensorSnapshot,
+                    weatherSnapshot = _uiState.value.weatherSnapshot,
+                    mapBitmap = mapBitmap,
                     config = stampConfig.value,
                     lensFacingFront = isFront
                 )
@@ -180,7 +265,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 timestamp = timestamp,
                 latitude = freshLocation?.latitude,
                 longitude = freshLocation?.longitude,
-                address = address,
+                address = detailed?.fullStreetAddress,
                 accuracy = freshLocation?.accuracyMeters,
                 altitude = freshLocation?.altitudeMeters
             )
@@ -201,5 +286,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     override fun onCleared() {
         super.onCleared()
         locationHelper.stopMonitoring()
+        sensorHelper.stop()
     }
 }
