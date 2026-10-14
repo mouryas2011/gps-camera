@@ -1,0 +1,76 @@
+name: Android CI & Release
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Test APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Unit Tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Assemble Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Locate APK
+        id: locate_apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          echo "Found APK: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPS-Map-Camera-debug-apk
+          path: ${{ steps.locate_apk.outputs.apk_path }}
+          retention-days: 14
+
+      - name: Create GitHub Release & Upload APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.locate_apk.outputs.apk_path }}
+          name: "Release ${{ github.ref_name }}"
+          body: |
+            ## GPS Map Camera ${{ github.ref_name }}
+            
+            ### Included Features:
+            - Live viewfinder with real-time GPS locking badge
+            - High-resolution camera capture with CameraX
+            - Auto date, time, coordinates, accuracy, altitude, and address burn-in stamp
+            - Configurable watermark positions and styling presets
+            - Scoped storage photo management and native sharing
+            - 100% on-device privacy
+            
+            **Download the attached APK below to install on any Android 8.0+ (API 26+) device.**
+            *Note: This is an installable debug/test build. For personal distribution, enable 'Install from unknown sources' if prompted.*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

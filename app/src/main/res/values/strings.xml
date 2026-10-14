@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">GPS Map Camera</string>
+    <string name="permission_camera_rationale">Camera permission is required to capture photos.</string>
+    <string name="permission_location_rationale">Location permission is required to add accurate GPS coordinates to your photo stamp.</string>
+    <string name="grant_permissions">Grant Permissions</string>
+    <string name="acquiring_gps">Acquiring GPS fix…</string>
+    <string name="gps_ready">GPS Locked</string>
+    <string name="gps_offline">Location unavailable</string>
+    <string name="gps_disabled">Location services are turned off</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="take_photo">Capture Photo</string>
+    <string name="gallery_title">Photos</string>
+    <string name="settings_title">Stamp Settings</string>
+    <string name="privacy_title">Privacy &amp; Data</string>
+    <string name="no_photos_yet">No stamped photos yet</string>
+    <string name="no_photos_hint">Take your first photo with real-time GPS metadata and timestamp!</string>
+    <string name="share">Share</string>
+    <string name="delete">Delete</string>
+    <string name="save_success">Photo stamped &amp; saved to Gallery</string>
+    <string name="save_failed">Failed to save photo</string>
+</resources>
