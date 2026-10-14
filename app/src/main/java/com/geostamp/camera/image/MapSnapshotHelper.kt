@@ -50,19 +50,28 @@ object MapSnapshotHelper {
 
     private fun downloadStaticTile(latitude: Double, longitude: Double, sizePx: Int): Bitmap? {
         val zoom = 17
+        val x = lonToTileX(longitude, zoom)
+        val y = latToTileY(latitude, zoom)
         val urls = listOf(
-            // Satellite / Aerial tile via Carto / OSM tiles
-            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/${latToTileY(latitude, zoom)}/${lonToTileX(longitude, zoom)}",
-            "https://tile.openstreetmap.org/$zoom/${lonToTileX(longitude, zoom)}/${latToTileY(latitude, zoom)}.png"
+            // 1. Google Satellite Hybrid (live satellite photography with street/area labels)
+            "https://mt1.google.com/vt/lyrs=y&x=$x&y=$y&z=$zoom",
+            "https://mt0.google.com/vt/lyrs=y&x=$x&y=$y&z=$zoom",
+            // 2. Google Pure Satellite (crystal clear real satellite photo)
+            "https://mt1.google.com/vt/lyrs=s&x=$x&y=$y&z=$zoom",
+            "https://mt2.google.com/vt/lyrs=s&x=$x&y=$y&z=$zoom",
+            // 3. Esri World Imagery (high-resolution global satellite)
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/$y/$x",
+            // 4. Carto / OSM tiles
+            "https://tile.openstreetmap.org/$zoom/$x/$y.png"
         )
 
         for (urlString in urls) {
             try {
                 val url = URL(urlString)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 2500
-                    readTimeout = 2500
-                    setRequestProperty("User-Agent", "GPSMapCamera/1.0 (Android)")
+                    connectTimeout = 3000
+                    readTimeout = 3000
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36")
                 }
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                     val stream: InputStream = conn.inputStream
@@ -84,7 +93,8 @@ object MapSnapshotHelper {
     }
 
     private fun latToTileY(lat: Double, zoom: Int): Int {
-        val latRad = Math.toRadians(lat)
+        val clampedLat = lat.coerceIn(-85.05112878, 85.05112878)
+        val latRad = Math.toRadians(clampedLat)
         return Math.floor((1.0 - Math.log(Math.tan(latRad) + 1.0 / Math.cos(latRad)) / Math.PI) / 2.0 * (1 shl zoom)).toInt()
     }
 

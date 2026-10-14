@@ -315,20 +315,21 @@ fun CameraScreen(
         )
         val activeReticlePoint = focusPoint ?: defaultReticleCenter
 
+        // 2. Viewfinder Reticles (Center circle with yellow & white crosshairs + separated upper-right ring)
         Box(
             modifier = Modifier
                 .offset(
-                    x = with(density) { (activeReticlePoint.x).toDp() - 65.dp },
-                    y = with(density) { (activeReticlePoint.y).toDp() - 65.dp }
+                    x = with(density) { (activeReticlePoint.x).toDp() - 48.dp },
+                    y = with(density) { (activeReticlePoint.y).toDp() - 48.dp }
                 )
-                .size(130.dp),
+                .size(96.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Outer thin circle
+            // Main circle
             Box(
                 modifier = Modifier
-                    .size(130.dp)
-                    .border(1.dp, Color(0x66FFFFFF), CircleShape)
+                    .size(92.dp)
+                    .border(1.2.dp, Color(0x99FFFFFF), CircleShape)
             )
             // Center yellow crosshair
             Text(
@@ -336,24 +337,28 @@ fun CameraScreen(
                 color = BrandYellow,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Light,
-                modifier = Modifier.offset(y = (-2).dp)
+                modifier = Modifier.offset(y = (-6).dp)
             )
-            // Secondary concentric offset circle (as seen in reference)
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .offset(x = 10.dp, y = 14.dp)
-                    .border(1.5.dp, Color(0xAAFFFFFF), CircleShape)
-            )
-            // White crosshair in secondary circle
+            // White crosshair below
             Text(
                 text = "+",
                 color = Color.White,
-                fontSize = 24.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Light,
-                modifier = Modifier.offset(x = 10.dp, y = 14.dp)
+                modifier = Modifier.offset(y = 12.dp)
             )
         }
+
+        // Separate upper-right metering circle (matches reference image)
+        Box(
+            modifier = Modifier
+                .offset(
+                    x = with(density) { (activeReticlePoint.x).toDp() + 55.dp },
+                    y = with(density) { (activeReticlePoint.y).toDp() - 85.dp }
+                )
+                .size(60.dp)
+                .border(2.dp, Color.White, CircleShape)
+        )
 
         // 3. Vertical Exposure Slider on Right Side (with sun icon and yellow active track)
         Box(
@@ -492,11 +497,11 @@ fun CameraScreen(
             }
         }
 
-        // 6. Live Watermark Overlay Badge (Classic Map on left, rich metadata on right)
+        // 6. Live Watermark Overlay Badge (docked tightly above zoom selector)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 190.dp, start = 12.dp, end = 12.dp)
+                .padding(bottom = 156.dp, start = 4.dp, end = 4.dp)
         ) {
             ClassicMapWatermarkCard(
                 uiState = uiState,
@@ -508,7 +513,7 @@ fun CameraScreen(
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 145.dp),
+                .padding(bottom = 114.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -516,7 +521,7 @@ fun CameraScreen(
             val is1x = currentZoom < 1.6f
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
                     .background(if (is1x) BrandYellow else Color(0x9910141C))
                     .clickable {
@@ -529,7 +534,7 @@ fun CameraScreen(
                     text = "1x",
                     color = if (is1x) Color.Black else Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 12.sp
                 )
             }
 
@@ -537,7 +542,7 @@ fun CameraScreen(
             val is2x = currentZoom >= 1.6f
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
                     .background(if (is2x) BrandYellow else Color(0x9910141C))
                     .clickable {
@@ -550,7 +555,7 @@ fun CameraScreen(
                     text = "2x",
                     color = if (is2x) Color.Black else Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 12.sp
                 )
             }
         }
@@ -559,7 +564,7 @@ fun CameraScreen(
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 100.dp),
+                .padding(bottom = 74.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -574,7 +579,7 @@ fun CameraScreen(
                     text = "PHOTO",
                     color = Color.Black,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 12.sp
                 )
             }
             // VIDEO
@@ -582,7 +587,7 @@ fun CameraScreen(
                 text = "VIDEO",
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 modifier = Modifier
                     .clickable {
                         viewModel.setMode(CameraMode.VIDEO)
@@ -597,7 +602,7 @@ fun CameraScreen(
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .background(Color(0xE6080C12))
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -885,7 +890,7 @@ fun ClassicMapWatermarkCard(
 ) {
     val dateText = remember(config.dateTimePattern) {
         val sdf = try {
-            SimpleDateFormat(config.dateTimePattern, Locale.getDefault())
+            SimpleDateFormat("EEEE, dd/MM/yyyy hh:mm a 'GMT' XXX", Locale.getDefault())
         } catch (_: Exception) {
             SimpleDateFormat("EEEE, dd/MM/yyyy hh:mm a 'GMT' Z", Locale.getDefault())
         }
@@ -915,72 +920,80 @@ fun ClassicMapWatermarkCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xE6080D14))
-            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
-            .padding(10.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xD905080E))
+            .border(0.8.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp))
+            .padding(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: Square Map Snapshot
+            // Left: Real Satellite Map Snapshot
             Box(
                 modifier = Modifier
-                    .size(105.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xFF1E272E))
-                    .border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(6.dp))
+                    .size(104.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF161F28))
+                    .border(0.6.dp, Color(0x40FFFFFF), RoundedCornerShape(4.dp))
             ) {
                 if (uiState.mapSnapshot != null) {
                     Image(
                         bitmap = uiState.mapSnapshot!!.asImageBitmap(),
-                        contentDescription = "Map Snapshot",
+                        contentDescription = "Live Satellite Map",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    // Fallback radar
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Google", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    // Fallback preview
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+                        Text(
+                            "Google",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 6.dp, bottom = 4.dp)
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             // Right: Text Details
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(1.5.dp)
             ) {
                 // Top Header Row with Logo Badge
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = headerString,
                         color = Color.White,
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Mini Logo Badge
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Mini Badge
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0x99101C2E))
-                            .border(0.8.dp, CyanPrimary, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color(0xCC0E1A29))
+                            .border(0.6.dp, CyanPrimary, RoundedCornerShape(3.dp))
+                            .padding(horizontal = 4.dp, vertical = 1.5.dp)
                     ) {
                         Text(
                             text = "📷 GPS Map Camera",
                             color = Color.White,
-                            fontSize = 7.5.sp,
+                            fontSize = 7.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -989,69 +1002,104 @@ fun ClassicMapWatermarkCard(
                 // Street Address
                 Text(
                     text = streetString,
-                    color = Color(0xFFD2DCE6),
-                    fontSize = 9.sp,
+                    color = Color(0xFFD6E0EA),
+                    fontSize = 8.5.sp,
+                    lineHeight = 10.sp,
                     maxLines = 1
                 )
 
                 // Lat & Long
                 Text(
                     text = coordString,
-                    color = Color(0xFFFFF176),
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.Bold
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
 
                 // Plus Code
                 Text(
                     text = "Plus Code : $plusCodeString",
                     color = Color(0xFFB0BEC5),
-                    fontSize = 8.5.sp
+                    fontSize = 8.sp
                 )
 
-                // Date & Time
-                Text(
-                    text = dateText,
-                    color = Color.White,
-                    fontSize = 8.5.sp,
-                    maxLines = 1
-                )
-
-                // Person Name
-                if (config.personName.isNotBlank() && config.personName != "-") {
-                    Text(
-                        text = "Person Name : ${config.personName}",
-                        color = Color(0xFFCAD1DB),
-                        fontSize = 8.5.sp
-                    )
-                }
-
-                // Weather & Compass
+                // Date & Time + Temperature on same row (just like reference image!)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${weather.weatherEmoji} ${String.format(Locale.US, "%.1f° C", weather.temperatureCelsius)}",
+                        text = dateText,
                         color = Color.White,
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 8.sp,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Text(
-                        text = "🧭 ${sensor.compassDegrees}° ${sensor.compassDirection}",
-                        color = Color(0xFF80D8FF),
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Medium
+                        text = "${weather.weatherEmoji} ${String.format(Locale.US, "%.2f° C", weather.temperatureCelsius)}",
+                        color = Color(0xFFFFD54F),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
 
-                // Bottom Environmental Sensor Row
-                Text(
-                    text = "💨 ${String.format(Locale.US, "%.1f km/h", weather.windSpeedKmh)}   💧 ${weather.humidityPercent}%   🧭 ${String.format(Locale.US, "%.0f hpa", sensor.pressureHpa)}   🧲 ${String.format(Locale.US, "%.1f µT", sensor.magneticFieldMicroTesla)}",
-                    color = Color(0xFF80D8FF),
-                    fontSize = 8.sp,
-                    maxLines = 1
-                )
+                // Optional Custom Note if present
+                if (config.customTitle.isNotBlank() && config.customTitle != "GPS Map Camera") {
+                    Text(
+                        text = config.customTitle,
+                        color = Color(0xFFCFD8DC),
+                        fontSize = 7.5.sp,
+                        maxLines = 1
+                    )
+                }
+
+                // Person Name & Compass Heading on same row (just like reference image!)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Person Name : ${if (config.personName.isNotBlank()) config.personName else "-"}",
+                        color = Color(0xFFB0BEC5),
+                        fontSize = 8.sp
+                    )
+                    Text(
+                        text = "🧭 ${sensor.compassDegrees}° ${sensor.compassDirection}",
+                        color = Color(0xFF81D4FA),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                // Bottom Environmental Sensor Row (wind, humidity, pressure, magnetic)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🍃 ${String.format(Locale.US, "%.2f km/h", weather.windSpeedKmh)}",
+                        color = Color(0xFFB0BEC5),
+                        fontSize = 7.5.sp
+                    )
+                    Text(
+                        text = "💧 ${weather.humidityPercent}%",
+                        color = Color(0xFFB0BEC5),
+                        fontSize = 7.5.sp
+                    )
+                    Text(
+                        text = "🧭 ${String.format(Locale.US, "%.0f hpa", sensor.pressureHpa)}",
+                        color = Color(0xFFB0BEC5),
+                        fontSize = 7.5.sp
+                    )
+                    Text(
+                        text = "🧲 ${String.format(Locale.US, "%.2f µT", sensor.magneticFieldMicroTesla)}",
+                        color = Color(0xFFB0BEC5),
+                        fontSize = 7.5.sp
+                    )
+                }
             }
         }
     }

@@ -323,28 +323,50 @@ object ImageProcessor {
             currentY += (metaFm.descent - metaFm.ascent) + lineSpacing
         }
 
-        // Date & Time
+        // Date & Time on left, Weather Temperature on right
         val timeFm = timePaint.fontMetrics
         canvas.drawText(timeStr, textLeft, currentY - timeFm.ascent, timePaint)
+
+        val weatherText = String.format(
+            Locale.US,
+            "%s %.2f° C",
+            weatherSnapshot.weatherEmoji,
+            weatherSnapshot.temperatureCelsius
+        )
+        val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#FFD54F")
+            textSize = 14f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val weatherWidth = tempPaint.measureText(weatherText)
+        val rightEdge = cardLeft + cardWidth - cardInnerPadding
+        canvas.drawText(weatherText, rightEdge - weatherWidth, currentY - timeFm.ascent, tempPaint)
         currentY += (timeFm.descent - timeFm.ascent) + lineSpacing
 
-        // Weather & Compass line
-        val weatherCompass = String.format(
+        // Person Name on left, Compass Heading on right
+        val personNameText = "Person Name : ${if (config.personName.isNotBlank()) config.personName else "-"}"
+        val metaFm = metaPaint.fontMetrics
+        canvas.drawText(personNameText, textLeft, currentY - metaFm.ascent, metaPaint)
+
+        val compassText = String.format(
             Locale.US,
-            "%s %.2f° C       🧭 %d° %s",
-            weatherSnapshot.weatherEmoji,
-            weatherSnapshot.temperatureCelsius,
+            "🧭 %d° %s",
             sensorSnapshot.compassDegrees,
             sensorSnapshot.compassDirection
         )
-        val metaFm = metaPaint.fontMetrics
-        canvas.drawText(weatherCompass, textLeft, currentY - metaFm.ascent, metaPaint)
+        val compassPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#81D4FA")
+            textSize = 14f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val compassWidth = compassPaint.measureText(compassText)
+        canvas.drawText(compassText, rightEdge - compassWidth, currentY - metaFm.ascent, compassPaint)
         currentY += (metaFm.descent - metaFm.ascent) + lineSpacing
 
-        // Bottom Environmental Sensor Row
+        // Bottom Environmental Sensor Row (Wind, Humidity, Barometric Pressure, Magnetic Field)
         val sensorText = String.format(
             Locale.US,
-            "💨 %.2f km/h   💧 %d%%   🧭 %.0f hpa   🧲 %.2f µT",
+            "🍃 %.2f km/h   💧 %d%%   🧭 %.0f hpa   🧲 %.2f µT",
             weatherSnapshot.windSpeedKmh,
             weatherSnapshot.humidityPercent,
             sensorSnapshot.pressureHpa,
