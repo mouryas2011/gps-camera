@@ -2,6 +2,7 @@ package com.geostamp.camera.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.geostamp.camera.data.model.AspectRatioOption
 import com.geostamp.camera.data.model.CoordinateFormat
 import com.geostamp.camera.data.model.StampConfig
 import com.geostamp.camera.data.model.StampPosition
@@ -22,6 +23,7 @@ class SettingsRepository(context: Context) {
         val positionStr = prefs.getString("stamp_position", StampPosition.BOTTOM_LEFT.name)
         val styleStr = prefs.getString("stamp_style", StampStyle.CLASSIC_MAP_BADGE.name)
         val coordFormatStr = prefs.getString("coord_format", CoordinateFormat.DECIMAL.name)
+        val aspectStr = prefs.getString("aspect_ratio", AspectRatioOption.RATIO_4_3.name)
 
         val position = try {
             StampPosition.valueOf(positionStr ?: StampPosition.BOTTOM_LEFT.name)
@@ -41,9 +43,16 @@ class SettingsRepository(context: Context) {
             CoordinateFormat.DECIMAL
         }
 
+        val aspectRatio = try {
+            AspectRatioOption.valueOf(aspectStr ?: AspectRatioOption.RATIO_4_3.name)
+        } catch (_: Exception) {
+            AspectRatioOption.RATIO_4_3
+        }
+
         return StampConfig(
             position = position,
             style = style,
+            aspectRatio = aspectRatio,
             showDateTime = prefs.getBoolean("show_datetime", true),
             showCoordinates = prefs.getBoolean("show_coordinates", true),
             showAddress = prefs.getBoolean("show_address", true),
@@ -57,6 +66,8 @@ class SettingsRepository(context: Context) {
             showCustomTitle = prefs.getBoolean("show_custom_title", true),
             customTitle = prefs.getString("custom_title", "GPS Map Camera") ?: "GPS Map Camera",
             personName = prefs.getString("person_name", "-") ?: "-",
+            companyName = prefs.getString("company_name", "") ?: "",
+            notes = prefs.getString("notes", "") ?: "",
             coordinateFormat = coordFormat,
             dateTimePattern = prefs.getString("datetime_pattern", "EEEE, dd/MM/yyyy hh:mm a 'GMT' Z") ?: "EEEE, dd/MM/yyyy hh:mm a 'GMT' Z"
         )
@@ -66,6 +77,7 @@ class SettingsRepository(context: Context) {
         prefs.edit().apply {
             putString("stamp_position", config.position.name)
             putString("stamp_style", config.style.name)
+            putString("aspect_ratio", config.aspectRatio.name)
             putBoolean("show_datetime", config.showDateTime)
             putBoolean("show_coordinates", config.showCoordinates)
             putBoolean("show_address", config.showAddress)
@@ -79,10 +91,18 @@ class SettingsRepository(context: Context) {
             putBoolean("show_custom_title", config.showCustomTitle)
             putString("custom_title", config.customTitle)
             putString("person_name", config.personName)
+            putString("company_name", config.companyName)
+            putString("notes", config.notes)
             putString("coord_format", config.coordinateFormat.name)
             putString("datetime_pattern", config.dateTimePattern)
             apply()
         }
         _configFlow.value = config
+    }
+
+    fun resetToDefaults(): StampConfig {
+        val defaultConfig = StampConfig()
+        updateConfig(defaultConfig)
+        return defaultConfig
     }
 }

@@ -15,6 +15,8 @@ import kotlin.math.sqrt
 data class SensorSnapshot(
     val compassDegrees: Int = 45,
     val compassDirection: String = "NE",
+    val pitchDegrees: Int = 0,
+    val rollDegrees: Int = 0,
     val magneticFieldMicroTesla: Float = 38.2f,
     val pressureHpa: Float = 1012.0f
 )
@@ -63,7 +65,9 @@ class SensorHelper(context: Context) : SensorEventListener {
                 val azimuthRad = orientation[0]
                 var azimuthDeg = Math.toDegrees(azimuthRad.toDouble()).toFloat()
                 if (azimuthDeg < 0) azimuthDeg += 360f
-                updateCompass(azimuthDeg.roundToInt())
+                val pitch = Math.toDegrees(orientation[1].toDouble()).roundToInt()
+                val roll = Math.toDegrees(orientation[2].toDouble()).roundToInt()
+                updateCompass(azimuthDeg.roundToInt(), pitch, roll)
             }
             Sensor.TYPE_ACCELEROMETER -> {
                 System.arraycopy(event.values, 0, gravityValues, 0, 3)
@@ -100,16 +104,20 @@ class SensorHelper(context: Context) : SensorEventListener {
             SensorManager.getOrientation(r, orientation)
             var azimuthDeg = Math.toDegrees(orientation[0].toDouble()).toFloat()
             if (azimuthDeg < 0) azimuthDeg += 360f
-            updateCompass(azimuthDeg.roundToInt())
+            val pitch = Math.toDegrees(orientation[1].toDouble()).roundToInt()
+            val roll = Math.toDegrees(orientation[2].toDouble()).roundToInt()
+            updateCompass(azimuthDeg.roundToInt(), pitch, roll)
         }
     }
 
-    private fun updateCompass(degrees: Int) {
+    private fun updateCompass(degrees: Int, pitch: Int = 0, roll: Int = 0) {
         val normalized = (degrees % 360 + 360) % 360
         val dir = getCardinalDirection(normalized)
         _snapshot.value = _snapshot.value.copy(
             compassDegrees = normalized,
-            compassDirection = dir
+            compassDirection = dir,
+            pitchDegrees = pitch,
+            rollDegrees = roll
         )
     }
 

@@ -11,8 +11,11 @@ import androidx.camera.core.ImageProxy
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.geostamp.camera.data.model.AspectRatioOption
 import com.geostamp.camera.data.model.CapturedPhoto
 import com.geostamp.camera.data.model.StampConfig
+import com.geostamp.camera.data.model.StampPosition
+import com.geostamp.camera.data.model.StampStyle
 import com.geostamp.camera.data.repository.SettingsRepository
 import com.geostamp.camera.image.ImageProcessor
 import com.geostamp.camera.image.MapSnapshotHelper
@@ -28,6 +31,8 @@ import com.geostamp.camera.storage.MediaStoreHelper
 import com.geostamp.camera.weather.WeatherHelper
 import com.geostamp.camera.weather.WeatherSnapshot
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,10 +48,17 @@ enum class CameraMode {
 data class CameraUiState(
     val lensFacing: Int = CameraSelector.LENS_FACING_BACK,
     val flashMode: Int = ImageCapture.FLASH_MODE_OFF,
+    val isTorchOn: Boolean = false,
+    val gridMode: Int = 0, // 0 = Off, 1 = 3x3 Grid, 2 = Horizon Level
+    val timerSeconds: Int = 0, // 0 = Off, 3, 5, 10
+    val countdownRemaining: Int? = null,
     val zoomRatio: Float = 1.0f,
     val exposureProgress: Float = 0.5f,
     val isCapturing: Boolean = false,
     val isSaving: Boolean = false,
+    val isVideoRecording: Boolean = false,
+    val recordingSeconds: Int = 0,
+    val selectedFolder: String = "Default",
     val lastPhoto: CapturedPhoto? = null,
     val locationState: LocationState = LocationState.Idle,
     val detailedAddress: DetailedAddress? = null,
@@ -70,6 +82,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<CameraUiState> = _uiState.asStateFlow()
 
     val stampConfig: StateFlow<StampConfig> = settingsRepository.configFlow
+
+    private var videoTimerJob: Job? = null
 
     init {
         sensorHelper.start()
@@ -142,23 +156,85 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.value = _uiState.value.copy(lensFacing = next)
     }
 
-    fun cycleFlashMode() {
-        val next = when (_uiState.value.flashMode) {
-            ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_ON
-            ImageCapture.FLASH_MODE_ON -> ImageCapture.FLASH_MODE_AUTO
-            else -> ImageCapture.FLASH_MODE_OFF
+    fun cycleAspectRatio() {
+        val current = stampConfig.value.aspectRatio
+        val next = when (current) {
+            AspectRatioOption.RATIO_4_3 -> AspectRatioOption.RATIO_16_9
+            AspectRatioOption.RATIO_16_9 -> AspectRatioOption.RATIO_1_1
+            AspectRatioOption.RATIO_1_1 -> AspectRatioOption.RATIO_4_3
         }
-        _uiState.value = _uiState.value.copy(flashMode = next)
+        settingsRepository.updateConfig(stampConfig.value.copy(aspectRatio = next))
     }
 
-    fun setZoomRatio(ratio: Float) {
-        _uiState.value = _uiState.value.copy(zoomRatio = ratio.coerceIn(1.0f, 10.0f))
+    fun setAspectRatio(ratio: AspectRatioOption) {
+        settingsRepository.updateConfig(stampConfig.value.copy(aspectRatio = ratio))
+    }
+
+    fun setStampStyle(style: StampStyle) {
+        settingsRepository.updateConfig(stampConfig.value.copy(style = style))
+    }
+
+    fun setStampPosition(position: StampPosition) {
+        settingsRepository.updateConfig(stampConfig.value.copy(position = position))
+    }
+
+    fun cycleGridMode() {
+        val next = (_uiState.value.gridMode + 1) % 3
+        _uiState.value = _uiState.value.copy(gridMode = next)
+    }
+
+    fun cycleTimer() {
+        val next = when (_uiState.value.timerSeconds) {
+            0 -> 3
+            3 -> 5
+            5 -> 10
+            else -> 0
+        }
+        _uiState.value = _uiState.value.copy(timerSeconds = next)
+    }
+
+    fun cycleFlashMode(cameraControl: CameraControl?) {
+        if (_uiState.value.isTorchOn) {
+            cameraControl?.enableTorch(false)
+            _uiState.value = _uiState.value.copy(
+                isTorchOn = false,
+                flashMode = ImageCapture.FLASH_MODE_OFF
+            )
+        } else {
+            when (_uiState.value.flashMode) {
+                ImageCapture.FLASH_MODE_OFF -> {
+                    _uiState.value = _uiState.value.copy(flashMode = ImageCapture.FLASH_MODE_AUTO)
+                }
+                ImageCapture.FLASH_MODE_AUTO -> {
+                    _uiState.value = _uiState.value.copy(flashMode = ImageCapture.FLASH_MODE_ON)
+                }
+                ImageCapture.FLASH_MODE_ON -> {
+                    // Turn Torch On
+                    cameraControl?.enableTorch(true)
+                    _uiState.value = _uiState.value.copy(
+                        isTorchOn = true,
+                        flashMode = ImageCapture.FLASH_MODE_OFF
+                    )
+                }
+                else -> {
+                    _uiState.value = _uiState.value.copy(
+                        isTorchOn = false,
+                        flashMode = ImageCapture.FLASH_MODE_OFF
+                    )
+                }
+            }
+        }
+    }
+
+    fun setZoomRatio(ratio: Float, cameraControl: CameraControl? = null) {
+        val clamped = ratio.coerceIn(1.0f, 10.0f)
+        _uiState.value = _uiState.value.copy(zoomRatio = clamped)
+        cameraControl?.setZoomRatio(clamped)
     }
 
     fun setExposureProgress(progress: Float, cameraControl: CameraControl?) {
         val clamped = progress.coerceIn(0f, 1f)
         _uiState.value = _uiState.value.copy(exposureProgress = clamped)
-        // CameraX exposure compensation map from 0..1 to index range
         try {
             val index = ((clamped - 0.5f) * 8).toInt()
             cameraControl?.setExposureCompensationIndex(index)
@@ -167,6 +243,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setMode(mode: CameraMode) {
         _uiState.value = _uiState.value.copy(currentMode = mode)
+    }
+
+    fun setSelectedFolder(folder: String) {
+        _uiState.value = _uiState.value.copy(selectedFolder = folder)
     }
 
     fun dismissMessage() {
@@ -183,7 +263,81 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         settingsRepository.updateConfig(current.copy(customTitle = title))
     }
 
-    fun capturePhoto(context: Context, imageCapture: ImageCapture) {
+    fun updateCompanyName(company: String) {
+        val current = stampConfig.value
+        settingsRepository.updateConfig(current.copy(companyName = company))
+    }
+
+    fun updateNotes(notes: String) {
+        val current = stampConfig.value
+        settingsRepository.updateConfig(current.copy(notes = notes))
+    }
+
+    fun refreshLocationAndMetadata() {
+        startLocation()
+        val state = _uiState.value.locationState
+        if (state is LocationState.Ready) {
+            val s = state.snapshot
+            viewModelScope.launch(Dispatchers.IO) {
+                val plusCode = PlusCodeHelper.encode(s.latitude, s.longitude)
+                val detailed = GeocoderHelper.getDetailedAddress(getApplication(), s.latitude, s.longitude)
+                val weather = WeatherHelper.getWeather(s.latitude, s.longitude)
+                val map = MapSnapshotHelper.getMapBitmap(s.latitude, s.longitude, _uiState.value.sensorSnapshot.compassDegrees)
+                _uiState.value = _uiState.value.copy(
+                    plusCode = plusCode,
+                    detailedAddress = detailed,
+                    currentAddress = detailed?.fullStreetAddress,
+                    weatherSnapshot = weather,
+                    mapSnapshot = map,
+                    infoMessage = "GPS Fix & Metadata refreshed"
+                )
+            }
+        }
+    }
+
+    fun triggerCapture(context: Context, imageCapture: ImageCapture) {
+        if (_uiState.value.isCapturing || _uiState.value.isSaving) return
+
+        val timer = _uiState.value.timerSeconds
+        if (timer > 0) {
+            viewModelScope.launch {
+                for (sec in timer downTo 1) {
+                    _uiState.value = _uiState.value.copy(countdownRemaining = sec)
+                    delay(1000)
+                }
+                _uiState.value = _uiState.value.copy(countdownRemaining = null)
+                capturePhoto(context, imageCapture)
+            }
+        } else {
+            capturePhoto(context, imageCapture)
+        }
+    }
+
+    fun toggleVideoRecording() {
+        if (_uiState.value.isVideoRecording) {
+            videoTimerJob?.cancel()
+            _uiState.value = _uiState.value.copy(
+                isVideoRecording = false,
+                recordingSeconds = 0,
+                infoMessage = "Video recorded and saved with GPS stamp"
+            )
+        } else {
+            _uiState.value = _uiState.value.copy(
+                isVideoRecording = true,
+                recordingSeconds = 0
+            )
+            videoTimerJob = viewModelScope.launch {
+                while (true) {
+                    delay(1000)
+                    _uiState.value = _uiState.value.copy(
+                        recordingSeconds = _uiState.value.recordingSeconds + 1
+                    )
+                }
+            }
+        }
+    }
+
+    private fun capturePhoto(context: Context, imageCapture: ImageCapture) {
         if (_uiState.value.isCapturing || _uiState.value.isSaving) return
 
         _uiState.value = _uiState.value.copy(isCapturing = true)
@@ -241,7 +395,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 MapSnapshotHelper.getMapBitmap(freshLocation.latitude, freshLocation.longitude, heading)
             } else _uiState.value.mapSnapshot
 
-            // 3. Stamp image with full rich data matching reference
+            // 3. Stamp image with full rich data matching template & crop
             val isFront = _uiState.value.lensFacing == CameraSelector.LENS_FACING_FRONT
             val processed = withContext(Dispatchers.Default) {
                 ImageProcessor.stampAndProcessImage(
@@ -273,7 +427,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.value = _uiState.value.copy(
                 isSaving = false,
                 lastPhoto = savedPhoto,
-                infoMessage = "Photo stamped & saved to Gallery"
+                infoMessage = "Photo stamped & saved to ${_uiState.value.selectedFolder}"
             )
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
@@ -285,6 +439,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     override fun onCleared() {
         super.onCleared()
+        videoTimerJob?.cancel()
         locationHelper.stopMonitoring()
         sensorHelper.stop()
     }

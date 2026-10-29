@@ -1,8 +1,5 @@
 package com.geostamp.camera.ui.settings
 
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +20,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -49,14 +49,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.geostamp.camera.data.model.AspectRatioOption
 import com.geostamp.camera.data.model.CoordinateFormat
 import com.geostamp.camera.data.model.StampConfig
 import com.geostamp.camera.data.model.StampPosition
 import com.geostamp.camera.data.model.StampStyle
 import com.geostamp.camera.data.repository.SettingsRepository
+import com.geostamp.camera.ui.theme.AccentRed
 import com.geostamp.camera.ui.theme.CyanPrimary
 import com.geostamp.camera.ui.theme.OnyxBackground
 import com.geostamp.camera.ui.theme.OnyxSurface
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private val BrandYellow = Color(0xFFFFCC00)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +74,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val repository = remember { SettingsRepository(context) }
     var config by remember { mutableStateOf(repository.configFlow.value) }
+    var showResetDialog by remember { mutableStateOf(false) }
 
     fun update(newConfig: StampConfig) {
         config = newConfig
@@ -79,7 +87,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Stamp Settings",
+                        text = "Stamp & Camera Settings",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -94,6 +102,15 @@ fun SettingsScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = { showResetDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.RestartAlt,
+                            contentDescription = "Reset Defaults",
+                            tint = BrandYellow
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = OnyxSurface)
             )
         }
@@ -105,13 +122,40 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp)
         ) {
-            // LIVE PREVIEW CARD
+            // 1. LIVE PREVIEW CARD
             SectionTitle("LIVE WATERMARK PREVIEW")
             LiveStampPreviewCard(config = config)
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // STAMP POSITION
+            // 2. ASPECT RATIO
+            SectionTitle("CAMERA ASPECT RATIO")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AspectRatioButton(
+                    title = "4:3 (Standard)",
+                    isSelected = config.aspectRatio == AspectRatioOption.RATIO_4_3,
+                    modifier = Modifier.weight(1f)
+                ) { update(config.copy(aspectRatio = AspectRatioOption.RATIO_4_3)) }
+
+                AspectRatioButton(
+                    title = "16:9 (Wide)",
+                    isSelected = config.aspectRatio == AspectRatioOption.RATIO_16_9,
+                    modifier = Modifier.weight(1f)
+                ) { update(config.copy(aspectRatio = AspectRatioOption.RATIO_16_9)) }
+
+                AspectRatioButton(
+                    title = "1:1 (Square)",
+                    isSelected = config.aspectRatio == AspectRatioOption.RATIO_1_1,
+                    modifier = Modifier.weight(1f)
+                ) { update(config.copy(aspectRatio = AspectRatioOption.RATIO_1_1)) }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 3. STAMP POSITION
             SectionTitle("STAMP POSITION ON PHOTO")
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -149,7 +193,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(26.dp))
 
-            // STAMP VISUAL STYLE
+            // 4. STAMP VISUAL STYLE (All 6 Styles)
             SectionTitle("STAMP VISUAL STYLE")
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StyleSelectorItem(
@@ -159,14 +203,26 @@ fun SettingsScreen(
                 ) { update(config.copy(style = StampStyle.CLASSIC_MAP_BADGE)) }
 
                 StyleSelectorItem(
+                    title = "Modern Minimal Pill",
+                    desc = "Sleek compact horizontal badge with circular mini-map & climate chip",
+                    isSelected = config.style == StampStyle.MODERN_MINIMAL
+                ) { update(config.copy(style = StampStyle.MODERN_MINIMAL)) }
+
+                StyleSelectorItem(
+                    title = "Surveyor / Technical Grid",
+                    desc = "Engineering inspection table with high-visibility grid borders for field reports",
+                    isSelected = config.style == StampStyle.SURVEYOR_GRID
+                ) { update(config.copy(style = StampStyle.SURVEYOR_GRID)) }
+
+                StyleSelectorItem(
                     title = "Frosted Glass Badge",
-                    desc = "Translucent dark glass card with cyan accent border",
+                    desc = "Translucent dark glass card with cyan vertical bar & glowing border",
                     isSelected = config.style == StampStyle.FROSTED_GLASS
                 ) { update(config.copy(style = StampStyle.FROSTED_GLASS)) }
 
                 StyleSelectorItem(
                     title = "High Contrast Dark",
-                    desc = "Solid deep black card with neon cyan top accent",
+                    desc = "Solid deep black card with golden yellow & bold white text",
                     isSelected = config.style == StampStyle.HIGH_CONTRAST_DARK
                 ) { update(config.copy(style = StampStyle.HIGH_CONTRAST_DARK)) }
 
@@ -179,7 +235,50 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(26.dp))
 
-            // WATERMARK CONTENT TOGGLES
+            // 5. CUSTOM TAGS & DETAILS
+            SectionTitle("CUSTOM WATERMARK LABELS")
+            OutlinedTextField(
+                value = config.customTitle,
+                onValueChange = { update(config.copy(customTitle = it)) },
+                label = { Text("Project / Custom Title") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = BrandYellow,
+                    focusedLabelColor = BrandYellow
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedTextField(
+                value = if (config.personName == "-") "" else config.personName,
+                onValueChange = { update(config.copy(personName = it.ifBlank { "-" })) },
+                label = { Text("Inspector / Person Name") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = BrandYellow,
+                    focusedLabelColor = BrandYellow
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedTextField(
+                value = config.companyName,
+                onValueChange = { update(config.copy(companyName = it)) },
+                label = { Text("Company / Organization (Optional)") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = BrandYellow,
+                    focusedLabelColor = BrandYellow
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(26.dp))
+
+            // 6. WATERMARK CONTENT TOGGLES
             SectionTitle("INFORMATION TO INCLUDE")
             SettingToggleRow(
                 title = "Local Date & Time",
@@ -271,33 +370,9 @@ fun SettingsScreen(
                 checked = config.showAltitude
             ) { update(config.copy(showAltitude = it)) }
 
-            SettingToggleRow(
-                title = "App / Project Title",
-                subtitle = "Custom header text on the stamp",
-                checked = config.showCustomTitle
-            ) { update(config.copy(showCustomTitle = it)) }
-
-            if (config.showCustomTitle) {
-                Spacer(modifier = Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = config.customTitle,
-                    onValueChange = { update(config.copy(customTitle = it)) },
-                    label = { Text("Watermark Title") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = Color(0xFF2A3644),
-                        focusedLabelColor = CyanPrimary,
-                        unfocusedLabelColor = Color.LightGray
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
             Spacer(modifier = Modifier.height(26.dp))
 
-            // COORDINATE FORMAT
+            // 7. COORDINATE FORMAT
             SectionTitle("COORDINATE FORMAT")
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -318,13 +393,13 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
 
-            // PRIVACY NOTICE BUTTON
+            // 8. PRIVACY POLICY
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF161F2B))
-                    .border(1.dp, Color(0xFF223042), RoundedCornerShape(14.dp))
+                    .border(1.dp, Color(0xFF223040), RoundedCornerShape(14.dp))
                     .clickable(onClick = onNavigateToPrivacy)
                     .padding(18.dp)
             ) {
@@ -365,6 +440,34 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(40.dp))
         }
+
+        // Reset Dialog
+        if (showResetDialog) {
+            AlertDialog(
+                onDismissRequest = { showResetDialog = false },
+                title = { Text("Reset to Defaults?", color = Color.White) },
+                text = {
+                    Text(
+                        "Are you sure you want to reset all watermark positions, styles, and toggles to default settings?",
+                        color = Color.LightGray
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        config = repository.resetToDefaults()
+                        showResetDialog = false
+                    }) {
+                        Text("Reset", color = AccentRed, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetDialog = false }) {
+                        Text("Cancel", color = Color.White)
+                    }
+                },
+                containerColor = Color(0xFF1E2836)
+            )
+        }
     }
 }
 
@@ -374,10 +477,40 @@ private fun SectionTitle(text: String) {
         text = text,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
-        color = CyanPrimary,
+        color = BrandYellow,
         letterSpacing = 1.2.sp,
         modifier = Modifier.padding(bottom = 12.dp)
     )
+}
+
+@Composable
+private fun AspectRatioButton(
+    title: String,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isSelected) Color(0xFF263428) else Color(0xFF141C26))
+            .border(
+                1.5.dp,
+                if (isSelected) BrandYellow else Color(0xFF233040),
+                RoundedCornerShape(10.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title,
+            color = if (isSelected) BrandYellow else Color.LightGray,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            fontSize = 11.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
 }
 
 @Composable
@@ -390,21 +523,21 @@ private fun PositionButton(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) Color(0xFF003844) else Color(0xFF141C26))
+            .background(if (isSelected) Color(0xFF263428) else Color(0xFF141C26))
             .border(
                 1.5.dp,
-                if (isSelected) CyanPrimary else Color(0xFF233040),
+                if (isSelected) BrandYellow else Color(0xFF233040),
                 RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick)
-            .padding(vertical = 14.dp, horizontal = 12.dp),
+            .padding(vertical = 12.dp, horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = title,
             color = if (isSelected) Color.White else Color.LightGray,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
@@ -421,10 +554,10 @@ private fun StyleSelectorItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) Color(0xFF003844) else Color(0xFF141C26))
+            .background(if (isSelected) Color(0xFF1B2836) else Color(0xFF141C26))
             .border(
                 1.5.dp,
-                if (isSelected) CyanPrimary else Color(0xFF233040),
+                if (isSelected) BrandYellow else Color(0xFF233040),
                 RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick)
@@ -433,7 +566,7 @@ private fun StyleSelectorItem(
         Column {
             Text(
                 text = title,
-                color = if (isSelected) CyanPrimary else Color.White,
+                color = if (isSelected) BrandYellow else Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp
             )
@@ -478,7 +611,7 @@ private fun SettingToggleRow(
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = CyanPrimary,
+                checkedTrackColor = BrandYellow,
                 uncheckedTrackColor = Color(0xFF233040),
                 uncheckedThumbColor = Color.LightGray
             )
@@ -490,9 +623,9 @@ private fun SettingToggleRow(
 fun LiveStampPreviewCard(config: StampConfig) {
     val sampleDate = remember(config.dateTimePattern) {
         val sdf = try {
-            java.text.SimpleDateFormat(config.dateTimePattern, Locale.getDefault())
+            SimpleDateFormat(config.dateTimePattern, Locale.getDefault())
         } catch (_: Exception) {
-            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         }
         sdf.format(Date())
     }
@@ -504,20 +637,19 @@ fun LiveStampPreviewCard(config: StampConfig) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(170.dp)
+            .height(180.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF0A0F17))
             .border(1.dp, Color(0xFF1E2838), RoundedCornerShape(16.dp))
             .padding(12.dp)
     ) {
-        // Grid pattern lines simulating camera viewfinder
+        // Grid pattern
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .border(0.5.dp, Color(0x22FFFFFF), RoundedCornerShape(10.dp))
         )
 
-        // Stamp Card Box positioned dynamically
         val alignment = when (config.position) {
             StampPosition.TOP_LEFT -> Alignment.TopStart
             StampPosition.TOP_RIGHT -> Alignment.TopEnd
@@ -535,6 +667,16 @@ fun LiveStampPreviewCard(config: StampConfig) {
                             .background(Color(0xE00A0F16))
                             .border(1.dp, Color(0x6000E5FF), RoundedCornerShape(8.dp))
                             .padding(8.dp)
+                        StampStyle.MODERN_MINIMAL -> Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xE00D1520))
+                            .border(1.dp, BrandYellow, RoundedCornerShape(10.dp))
+                            .padding(8.dp)
+                        StampStyle.SURVEYOR_GRID -> Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xF0080C12))
+                            .border(1.dp, BrandYellow, RoundedCornerShape(4.dp))
+                            .padding(6.dp)
                         StampStyle.FROSTED_GLASS -> Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(Color(0xD010151E))
@@ -545,8 +687,7 @@ fun LiveStampPreviewCard(config: StampConfig) {
                             .background(Color(0xF506080C))
                             .border(1.dp, Color(0xFF233040), RoundedCornerShape(8.dp))
                             .padding(8.dp)
-                        StampStyle.CLEAN_OUTLINE -> Modifier
-                            .padding(8.dp)
+                        StampStyle.CLEAN_OUTLINE -> Modifier.padding(8.dp)
                     }
                 )
         ) {
@@ -555,7 +696,7 @@ fun LiveStampPreviewCard(config: StampConfig) {
                     Box(
                         modifier = Modifier
                             .width(3.dp)
-                            .height(42.dp)
+                            .height(44.dp)
                             .background(CyanPrimary, RoundedCornerShape(2.dp))
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -565,8 +706,8 @@ fun LiveStampPreviewCard(config: StampConfig) {
                     if (config.showCustomTitle && config.customTitle.isNotBlank()) {
                         Text(
                             text = config.customTitle.uppercase(),
-                            color = CyanPrimary,
-                            fontSize = 10.sp,
+                            color = BrandYellow,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -574,7 +715,7 @@ fun LiveStampPreviewCard(config: StampConfig) {
                         Text(
                             text = sampleDate,
                             color = Color.White,
-                            fontSize = 9.sp,
+                            fontSize = 8.5.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -582,20 +723,13 @@ fun LiveStampPreviewCard(config: StampConfig) {
                         Text(
                             text = sampleCoords,
                             color = Color.White,
-                            fontSize = 9.sp,
+                            fontSize = 8.5.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                     if (config.showAccuracy || config.showAltitude) {
-                        val accAlt = buildString {
-                            if (config.showAccuracy) append("Accuracy: ±3.8m")
-                            if (config.showAltitude) {
-                                if (isNotEmpty()) append(" • ")
-                                append("Alt: 42.0m")
-                            }
-                        }
                         Text(
-                            text = accAlt,
+                            text = "±3.8m • Alt: 42.0m",
                             color = Color(0xFFCAD1DB),
                             fontSize = 8.sp
                         )
@@ -604,7 +738,7 @@ fun LiveStampPreviewCard(config: StampConfig) {
                         Text(
                             text = "Market St, San Francisco, CA, USA",
                             color = Color(0xFFB0BCCC),
-                            fontSize = 8.sp,
+                            fontSize = 7.5.sp,
                             maxLines = 1
                         )
                     }
@@ -613,4 +747,3 @@ fun LiveStampPreviewCard(config: StampConfig) {
         }
     }
 }
-

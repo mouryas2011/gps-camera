@@ -1,8 +1,6 @@
 package com.geostamp.camera.ui.camera
 
 import android.Manifest
-import android.content.Intent
-import android.provider.Settings
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,7 +17,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,25 +39,27 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
-import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.FlashAuto
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Timer3
+import androidx.compose.material.icons.filled.Timer10
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,12 +77,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -92,17 +89,24 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
+import com.geostamp.camera.data.model.AspectRatioOption
 import com.geostamp.camera.data.model.CapturedPhoto
-import com.geostamp.camera.data.model.StampConfig
-import com.geostamp.camera.data.model.StampStyle
+import com.geostamp.camera.data.model.StampPosition
 import com.geostamp.camera.location.LocationState
+import com.geostamp.camera.ui.components.AspectFramingMask
+import com.geostamp.camera.ui.components.HorizonLevelGauge
+import com.geostamp.camera.ui.components.LiveWatermarkOverlay
+import com.geostamp.camera.ui.components.LocationDetailsDialog
+import com.geostamp.camera.ui.components.NotesAndTagsDialog
+import com.geostamp.camera.ui.components.ProjectFolderDialog
+import com.geostamp.camera.ui.components.RuleOfThirdsGrid
+import com.geostamp.camera.ui.components.TapFocusRing
+import com.geostamp.camera.ui.components.TemplateChooserSheet
+import com.geostamp.camera.ui.components.TimerCountdownOverlay
 import com.geostamp.camera.ui.theme.AccentAmber
 import com.geostamp.camera.ui.theme.AccentGreen
 import com.geostamp.camera.ui.theme.AccentRed
 import com.geostamp.camera.ui.theme.CyanPrimary
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 private val BrandYellow = Color(0xFFFFCC00)
 
@@ -116,7 +120,6 @@ fun CameraScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val haptic = LocalHapticFeedback.current
-    val density = LocalDensity.current
 
     val uiState by viewModel.uiState.collectAsState()
     val stampConfig by viewModel.stampConfig.collectAsState()
@@ -130,9 +133,11 @@ fun CameraScreen(
     var hasCameraPermission by remember { mutableStateOf(false) }
     var hasLocationPermission by remember { mutableStateOf(false) }
 
+    // Dialog & Sheet states
     var showNotesDialog by remember { mutableStateOf(false) }
     var showLocationDetailsDialog by remember { mutableStateOf(false) }
-    var showTemplateDialog by remember { mutableStateOf(false) }
+    var showTemplateSheet by remember { mutableStateOf(false) }
+    var showFolderDialog by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -197,7 +202,7 @@ fun CameraScreen(
                         detectTransformGestures { _, _, zoom, _ ->
                             val newZoom = (currentZoom * zoom).coerceIn(1f, maxZoom)
                             currentZoom = newZoom
-                            cameraControl?.setZoomRatio(newZoom)
+                            viewModel.setZoomRatio(newZoom, cameraControl)
                         }
                     }
                     .pointerInput(Unit) {
@@ -248,6 +253,7 @@ fun CameraScreen(
                                 capture
                             )
                             cameraControl = cam.cameraControl
+
                             cam.cameraInfo.zoomState.observe(lifecycleOwner) { zoomState ->
                                 maxZoom = zoomState.maxZoomRatio.coerceAtMost(8f)
                             }
@@ -279,14 +285,14 @@ fun CameraScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Camera Permission Required",
+                        text = "Camera & Location Permission Required",
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "GPS Map Camera needs camera access to capture photos with visible location stamps.",
+                        text = "GPS Map Camera needs camera and location access to capture photos with verified GPS coordinates and addresses.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.LightGray
                     )
@@ -302,167 +308,171 @@ fun CameraScreen(
                             )
                         }
                     ) {
-                        Text("Grant Permission", color = BrandYellow, fontSize = 16.sp)
+                        Text("Grant Permission", color = BrandYellow, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
-        // 2. Dual Concentric Focus Reticle (as shown in reference screenshot)
-        val defaultReticleCenter = Offset(
-            x = LocalContext.current.resources.displayMetrics.widthPixels / 2f,
-            y = LocalContext.current.resources.displayMetrics.heightPixels * 0.45f
-        )
-        val activeReticlePoint = focusPoint ?: defaultReticleCenter
+        // 2. Aspect Ratio Framing Mask (Visual crop simulation for 1:1 or 16:9)
+        AspectFramingMask(aspectRatio = stampConfig.aspectRatio)
 
-        // 2. Viewfinder Reticles (Center circle with yellow & white crosshairs + separated upper-right ring)
-        Box(
-            modifier = Modifier
-                .offset(
-                    x = with(density) { (activeReticlePoint.x).toDp() - 48.dp },
-                    y = with(density) { (activeReticlePoint.y).toDp() - 48.dp }
-                )
-                .size(96.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            // Main circle
-            Box(
-                modifier = Modifier
-                    .size(92.dp)
-                    .border(1.2.dp, Color(0x99FFFFFF), CircleShape)
-            )
-            // Center yellow crosshair
-            Text(
-                text = "+",
-                color = BrandYellow,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Light,
-                modifier = Modifier.offset(y = (-6).dp)
-            )
-            // White crosshair below
-            Text(
-                text = "+",
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Light,
-                modifier = Modifier.offset(y = 12.dp)
+        // 3. Grid / Horizon Level Viewfinder Tools
+        if (uiState.gridMode == 1) {
+            RuleOfThirdsGrid()
+        } else if (uiState.gridMode == 2) {
+            HorizonLevelGauge(
+                pitchDegrees = uiState.sensorSnapshot.pitchDegrees,
+                rollDegrees = uiState.sensorSnapshot.rollDegrees
             )
         }
 
-        // Separate upper-right metering circle (matches reference image)
-        Box(
-            modifier = Modifier
-                .offset(
-                    x = with(density) { (activeReticlePoint.x).toDp() + 55.dp },
-                    y = with(density) { (activeReticlePoint.y).toDp() - 85.dp }
-                )
-                .size(60.dp)
-                .border(2.dp, Color.White, CircleShape)
-        )
+        // 4. Tap to focus reticle ring
+        TapFocusRing(focusPoint = focusPoint)
 
-        // 3. Vertical Exposure Slider on Right Side (with sun icon and yellow active track)
+        // 5. Timer countdown overlay (e.g. 3... 2... 1...)
+        TimerCountdownOverlay(secondsRemaining = uiState.countdownRemaining)
+
+        // 6. Vertical Exposure Slider on Right Side
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 16.dp)
-                .height(220.dp)
+                .padding(end = 14.dp)
+                .height(200.dp)
                 .width(36.dp)
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        val delta = -dragAmount.y / 200f
+                        val delta = -dragAmount.y / 180f
                         val newProgress = (uiState.exposureProgress + delta).coerceIn(0f, 1f)
                         viewModel.setExposureProgress(newProgress, cameraControl)
                     }
                 },
             contentAlignment = Alignment.Center
         ) {
-            // Track background line
             Box(
                 modifier = Modifier
                     .width(2.dp)
-                    .height(180.dp)
+                    .height(160.dp)
                     .background(Color(0x55FFFFFF))
             )
-            // Active yellow line
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .width(2.5.dp)
-                    .height((180 * uiState.exposureProgress).dp)
+                    .height((160 * uiState.exposureProgress).dp)
                     .background(BrandYellow)
             )
-            // Sun Icon Knob
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .offset(y = (-(180 * uiState.exposureProgress)).dp)
-                    .size(28.dp)
+                    .offset(y = (-(160 * uiState.exposureProgress)).dp)
+                    .size(26.dp)
                     .background(Color.Black, CircleShape)
-                    .border(1.dp, BrandYellow, CircleShape),
+                    .border(1.2.dp, BrandYellow, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.WbSunny,
                     contentDescription = "Exposure",
                     tint = BrandYellow,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
             }
         }
 
-        // 4. Aspect Ratio Badge at Top Left (e.g. [4:3])
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(top = 98.dp, start = 18.dp)
-                .size(24.dp)
-                .border(1.5.dp, Color(0xCCFFFFFF), RoundedCornerShape(4.dp))
-        )
-
-        // 5. Top Controls Bar
+        // 7. Top Controls Bar (Aspect Ratio, Flash/Torch, Grid/Level, Timer, Notes, GPS Info, Lens, Settings)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 38.dp, start = 12.dp, end = 12.dp),
+                .padding(top = 36.dp, start = 8.dp, end = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Aspect Ratio toggle
-            IconButton(onClick = { /* Aspect ratio cycle */ }) {
-                Icon(
-                    imageVector = Icons.Default.AspectRatio,
-                    contentDescription = "Aspect Ratio",
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+            // Aspect Ratio Cycle Button with label
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0x77000000))
+                    .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(8.dp))
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.cycleAspectRatio()
+                    }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stampConfig.aspectRatio.label,
+                    color = BrandYellow,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            // Flash Mode Toggle
-            IconButton(onClick = { viewModel.cycleFlashMode() }) {
+            // Flash / Torch Mode Toggle
+            IconButton(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                viewModel.cycleFlashMode(cameraControl)
+            }) {
                 Icon(
-                    imageVector = when (uiState.flashMode) {
-                        ImageCapture.FLASH_MODE_ON -> Icons.Default.FlashOn
-                        ImageCapture.FLASH_MODE_AUTO -> Icons.Default.FlashAuto
+                    imageVector = when {
+                        uiState.isTorchOn -> Icons.Default.FlashlightOn
+                        uiState.flashMode == ImageCapture.FLASH_MODE_ON -> Icons.Default.FlashOn
+                        uiState.flashMode == ImageCapture.FLASH_MODE_AUTO -> Icons.Default.FlashAuto
                         else -> Icons.Default.FlashOff
                     },
                     contentDescription = "Flash",
-                    tint = if (uiState.flashMode != ImageCapture.FLASH_MODE_OFF) BrandYellow else Color.White,
-                    modifier = Modifier.size(26.dp)
+                    tint = if (uiState.isTorchOn || uiState.flashMode != ImageCapture.FLASH_MODE_OFF) BrandYellow else Color.White,
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
-            // Notes / Title dialog
+            // Grid & Horizon Level Toggle
+            IconButton(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                viewModel.cycleGridMode()
+            }) {
+                Icon(
+                    imageVector = when (uiState.gridMode) {
+                        1 -> Icons.Default.GridOn
+                        2 -> Icons.Default.Straighten
+                        else -> Icons.Default.GridOn
+                    },
+                    contentDescription = "Grid",
+                    tint = if (uiState.gridMode > 0) BrandYellow else Color(0x99FFFFFF),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Timer (Off, 3s, 5s, 10s)
+            IconButton(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                viewModel.cycleTimer()
+            }) {
+                Icon(
+                    imageVector = when (uiState.timerSeconds) {
+                        3 -> Icons.Default.Timer3
+                        10 -> Icons.Default.Timer10
+                        else -> Icons.Default.Timer
+                    },
+                    contentDescription = "Timer",
+                    tint = if (uiState.timerSeconds > 0) BrandYellow else Color(0x99FFFFFF),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Notes / Title Dialog
             IconButton(onClick = { showNotesDialog = true }) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.NoteAdd,
                     contentDescription = "Custom Tag",
                     tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
-            // Location Pin Details
+            // GPS Location Details
             IconButton(onClick = { showLocationDetailsDialog = true }) {
                 Icon(
                     imageVector = Icons.Default.LocationOn,
@@ -472,17 +482,20 @@ fun CameraScreen(
                         is LocationState.Acquiring -> AccentAmber
                         else -> AccentRed
                     },
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
-            // Switch camera lens
-            IconButton(onClick = { viewModel.toggleLens() }) {
+            // Switch Camera Lens (Front/Back)
+            IconButton(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                viewModel.toggleLens()
+            }) {
                 Icon(
                     imageVector = Icons.Default.Cameraswitch,
                     contentDescription = "Switch Camera",
                     tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
@@ -492,128 +505,139 @@ fun CameraScreen(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
                     tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
 
-        // 6. Live Watermark Overlay Badge (docked tightly above zoom selector)
-        Box(
-            modifier = Modifier
+        // 8. Live Watermark Overlay (Positioned dynamically according to stampConfig.position)
+        val isTopWatermark = stampConfig.position == StampPosition.TOP_LEFT || stampConfig.position == StampPosition.TOP_RIGHT
+        val watermarkPaddingModifier = if (isTopWatermark) {
+            Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 84.dp)
+        } else {
+            Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 156.dp, start = 4.dp, end = 4.dp)
-        ) {
-            ClassicMapWatermarkCard(
-                uiState = uiState,
-                config = stampConfig
-            )
+                .padding(bottom = 158.dp)
         }
 
-        // 7. Zoom Pill Switchers (1x in yellow circle, 2x in dark circle)
+        LiveWatermarkOverlay(
+            uiState = uiState,
+            config = stampConfig,
+            onCardClick = { showTemplateSheet = true },
+            modifier = watermarkPaddingModifier
+        )
+
+        // 9. Zoom Pills (0.5x, 1x, 2x, 5x)
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 114.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 1x Button
-            val is1x = currentZoom < 1.6f
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(if (is1x) BrandYellow else Color(0x9910141C))
-                    .clickable {
-                        currentZoom = 1.0f
-                        cameraControl?.setZoomRatio(1.0f)
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "1x",
-                    color = if (is1x) Color.Black else Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
-            }
-
-            // 2x Button
-            val is2x = currentZoom >= 1.6f
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(if (is2x) BrandYellow else Color(0x9910141C))
-                    .clickable {
-                        currentZoom = 2.0f.coerceAtMost(maxZoom)
-                        cameraControl?.setZoomRatio(currentZoom)
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "2x",
-                    color = if (is2x) Color.Black else Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
+            val zoomLevels = listOf(1.0f, 2.0f, 5.0f)
+            zoomLevels.forEach { targetZoom ->
+                val isSelected = currentZoom in (targetZoom - 0.4f)..(targetZoom + 0.4f)
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected) BrandYellow else Color(0x9910141C))
+                        .border(1.dp, if (isSelected) BrandYellow else Color(0x33FFFFFF), CircleShape)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            currentZoom = targetZoom.coerceAtMost(maxZoom)
+                            viewModel.setZoomRatio(currentZoom, cameraControl)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${targetZoom.toInt()}x",
+                        color = if (isSelected) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
 
-        // 8. Mode Selector (PHOTO / VIDEO)
+        // 10. Mode Selector (PHOTO / VIDEO) with smooth animated pills
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 74.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // PHOTO
+            // PHOTO Mode
+            val isPhoto = uiState.currentMode == CameraMode.PHOTO
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(14.dp))
-                    .background(BrandYellow)
+                    .background(if (isPhoto) BrandYellow else Color.Transparent)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.setMode(CameraMode.PHOTO)
+                    }
                     .padding(horizontal = 14.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = "PHOTO",
-                    color = Color.Black,
+                    color = if (isPhoto) Color.Black else Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp
                 )
             }
-            // VIDEO
-            Text(
-                text = "VIDEO",
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 12.sp,
+
+            // VIDEO Mode
+            val isVideo = uiState.currentMode == CameraMode.VIDEO
+            Box(
                 modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (isVideo) BrandYellow else Color.Transparent)
                     .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         viewModel.setMode(CameraMode.VIDEO)
                     }
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            )
+                    .padding(horizontal = 14.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (uiState.isVideoRecording) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(AccentRed)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Text(
+                        text = if (uiState.isVideoRecording) "REC %02d:%02d".format(uiState.recordingSeconds / 60, uiState.recordingSeconds % 60) else "VIDEO",
+                        color = if (isVideo) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
         }
 
-        // 9. Bottom Controls Bar (Preview, Location, Shutter, Default, Templates)
+        // 11. Bottom Controls Bar (Preview, Location, Shutter, Folder, Templates)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .background(Color(0xE6080C12))
-                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .background(Color(0xF0080C12))
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Preview
-                BottomBarItem(
-                    label = "Preview",
-                    onClick = onNavigateToGallery
-                ) {
+                // 1. Preview thumbnail
+                BottomBarItem(label = "Preview", onClick = onNavigateToGallery) {
                     Box(
                         modifier = Modifier
                             .size(46.dp)
@@ -640,11 +664,8 @@ fun CameraScreen(
                     }
                 }
 
-                // 2. Location
-                BottomBarItem(
-                    label = "Location",
-                    onClick = { showLocationDetailsDialog = true }
-                ) {
+                // 2. GPS Location status button
+                BottomBarItem(label = "Location", onClick = { showLocationDetailsDialog = true }) {
                     Box(
                         modifier = Modifier
                             .size(46.dp)
@@ -655,23 +676,37 @@ fun CameraScreen(
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = "Location",
-                            tint = Color.White,
+                            tint = when (uiState.locationState) {
+                                is LocationState.Ready -> AccentGreen
+                                is LocationState.Acquiring -> AccentAmber
+                                else -> AccentRed
+                            },
                             modifier = Modifier.size(26.dp)
                         )
                     }
                 }
 
-                // 3. Shutter Button
+                // 3. Shutter / Record Button
                 Box(
                     modifier = Modifier
                         .size(76.dp)
-                        .border(3.5.dp, Color.White, CircleShape)
+                        .border(3.5.dp, if (uiState.currentMode == CameraMode.VIDEO) AccentRed else Color.White, CircleShape)
                         .padding(5.dp)
                         .clip(CircleShape)
-                        .background(if (uiState.isCapturing || uiState.isSaving) Color.DarkGray else Color.White)
+                        .background(
+                            when {
+                                uiState.isCapturing || uiState.isSaving -> Color.DarkGray
+                                uiState.currentMode == CameraMode.VIDEO -> AccentRed
+                                else -> Color.White
+                            }
+                        )
                         .clickable(enabled = !uiState.isCapturing && !uiState.isSaving && hasCameraPermission) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            imageCapture?.let { viewModel.capturePhoto(context, it) }
+                            if (uiState.currentMode == CameraMode.VIDEO) {
+                                viewModel.toggleVideoRecording()
+                            } else {
+                                imageCapture?.let { viewModel.triggerCapture(context, it) }
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -684,11 +719,8 @@ fun CameraScreen(
                     }
                 }
 
-                // 4. Default / Folder
-                BottomBarItem(
-                    label = "Default",
-                    onClick = onNavigateToGallery
-                ) {
+                // 4. Folder / Project Organizer
+                BottomBarItem(label = "Folder", onClick = { showFolderDialog = true }) {
                     Box(
                         modifier = Modifier
                             .size(46.dp)
@@ -698,18 +730,15 @@ fun CameraScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Folder,
-                            contentDescription = "Default Folder",
+                            contentDescription = "Project Folder",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }
                 }
 
-                // 5. Templates
-                BottomBarItem(
-                    label = "Templates",
-                    onClick = { showTemplateDialog = true }
-                ) {
+                // 5. Watermark Templates Chooser
+                BottomBarItem(label = "Templates", onClick = { showTemplateSheet = true }) {
                     Box(
                         modifier = Modifier
                             .size(46.dp)
@@ -720,7 +749,7 @@ fun CameraScreen(
                         Icon(
                             imageVector = Icons.Default.GridView,
                             contentDescription = "Templates",
-                            tint = Color.White,
+                            tint = BrandYellow,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -728,7 +757,7 @@ fun CameraScreen(
             }
         }
 
-        // Info / Error Floating Banner
+        // 12. Floating Snackbar for info/error messages
         AnimatedVisibility(
             visible = uiState.infoMessage != null || uiState.errorMessage != null,
             enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -762,345 +791,48 @@ fun CameraScreen(
             }
         }
 
-        // Dialog: Custom Note / Person Name
+        // 13. Dialogs & Bottom Sheets
         if (showNotesDialog) {
-            var tempName by remember { mutableStateOf(stampConfig.personName) }
-            var tempTitle by remember { mutableStateOf(stampConfig.customTitle) }
-
-            AlertDialog(
-                onDismissRequest = { showNotesDialog = false },
-                title = { Text("Watermark Title & Name", color = Color.White) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedTextField(
-                            value = tempTitle,
-                            onValueChange = { tempTitle = it },
-                            label = { Text("Title") },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = BrandYellow,
-                                focusedLabelColor = BrandYellow
-                            )
-                        )
-                        OutlinedTextField(
-                            value = tempName,
-                            onValueChange = { tempName = it },
-                            label = { Text("Person Name") },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = BrandYellow,
-                                focusedLabelColor = BrandYellow
-                            )
-                        )
-                    }
+            NotesAndTagsDialog(
+                config = stampConfig,
+                onSave = { title, person, company, notes ->
+                    viewModel.updateCustomTitle(title)
+                    viewModel.updatePersonName(person)
+                    viewModel.updateCompanyName(company)
+                    viewModel.updateNotes(notes)
                 },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.updateCustomTitle(tempTitle)
-                        viewModel.updatePersonName(tempName)
-                        showNotesDialog = false
-                    }) {
-                        Text("Save", color = BrandYellow, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showNotesDialog = false }) {
-                        Text("Cancel", color = Color.LightGray)
-                    }
-                },
-                containerColor = Color(0xFF1E2836)
+                onDismiss = { showNotesDialog = false }
             )
         }
 
-        // Dialog: Exact Location Info & Refresh
         if (showLocationDetailsDialog) {
-            val loc = when (val s = uiState.locationState) {
-                is LocationState.Ready -> s.snapshot
-                else -> null
-            }
-
-            AlertDialog(
-                onDismissRequest = { showLocationDetailsDialog = false },
-                title = { Text("Exact GPS Fix", color = Color.White, fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (loc != null) {
-                            Text("Latitude: ${loc.latitude}", color = Color.White, fontSize = 14.sp)
-                            Text("Longitude: ${loc.longitude}", color = Color.White, fontSize = 14.sp)
-                            Text("Accuracy: ±${String.format(Locale.US, "%.1fm", loc.accuracyMeters)}", color = AccentGreen, fontWeight = FontWeight.Bold)
-                            if (loc.altitudeMeters != null) {
-                                Text("Altitude: ${String.format(Locale.US, "%.1fm", loc.altitudeMeters)}", color = Color.LightGray, fontSize = 14.sp)
-                            }
-                            if (!uiState.plusCode.isNullOrBlank()) {
-                                Text("Plus Code: ${uiState.plusCode}", color = BrandYellow, fontSize = 14.sp)
-                            }
-                            if (!uiState.currentAddress.isNullOrBlank()) {
-                                Text("Address:\n${uiState.currentAddress}", color = Color.LightGray, fontSize = 13.sp)
-                            }
-                        } else {
-                            Text("Acquiring high accuracy GPS satellite fix...", color = AccentAmber)
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.startLocation()
-                        showLocationDetailsDialog = false
-                    }) {
-                        Text("Refresh Fix", color = BrandYellow, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showLocationDetailsDialog = false }) {
-                        Text("Close", color = Color.White)
-                    }
-                },
-                containerColor = Color(0xFF1E2836)
+            LocationDetailsDialog(
+                locationState = uiState.locationState,
+                detailedAddress = uiState.detailedAddress,
+                plusCode = uiState.plusCode,
+                onRefreshFix = { viewModel.refreshLocationAndMetadata() },
+                onDismiss = { showLocationDetailsDialog = false }
             )
         }
 
-        // Dialog: Template Chooser
-        if (showTemplateDialog) {
-            AlertDialog(
-                onDismissRequest = { showTemplateDialog = false },
-                title = { Text("Choose Watermark Template", color = Color.White) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Selected Template: Classic Map Badge (Matches Reference Image)", color = BrandYellow, fontSize = 14.sp)
-                        Text("Includes live satellite map tile, coordinates, Plus Code, compass, weather, and sensors.", color = Color.LightGray, fontSize = 12.sp)
-                    }
+        if (showFolderDialog) {
+            ProjectFolderDialog(
+                currentFolder = uiState.selectedFolder,
+                onSelectFolder = { folder ->
+                    viewModel.setSelectedFolder(folder)
                 },
-                confirmButton = {
-                    TextButton(onClick = { showTemplateDialog = false }) {
-                        Text("Done", color = BrandYellow, fontWeight = FontWeight.Bold)
-                    }
-                },
-                containerColor = Color(0xFF1E2836)
+                onDismiss = { showFolderDialog = false }
             )
         }
-    }
-}
 
-@Composable
-fun ClassicMapWatermarkCard(
-    uiState: CameraUiState,
-    config: StampConfig
-) {
-    val dateText = remember(config.dateTimePattern) {
-        val sdf = try {
-            SimpleDateFormat("EEEE, dd/MM/yyyy hh:mm a 'GMT' XXX", Locale.getDefault())
-        } catch (_: Exception) {
-            SimpleDateFormat("EEEE, dd/MM/yyyy hh:mm a 'GMT' Z", Locale.getDefault())
-        }
-        sdf.format(Date())
-    }
-
-    val loc = when (val s = uiState.locationState) {
-        is LocationState.Ready -> s.snapshot
-        else -> null
-    }
-
-    val coordString = remember(loc, config.coordinateFormat) {
-        if (loc != null) {
-            StampConfig.formatCoordinates(loc.latitude, loc.longitude, config.coordinateFormat)
-        } else {
-            "Lat 22.374124° Long 82.735036°"
-        }
-    }
-
-    val plusCodeString = uiState.plusCode ?: "7MJ49PFP+J2"
-    val headerString = uiState.detailedAddress?.shortHeader ?: "Korba, Chhattisgarh, India 🇮🇳"
-    val streetString = uiState.detailedAddress?.fullStreetAddress ?: "223, Rampur, Korba, Chhattisgarh 495677, India"
-
-    val weather = uiState.weatherSnapshot
-    val sensor = uiState.sensorSnapshot
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xD905080E))
-            .border(0.8.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp))
-            .padding(6.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left: Real Satellite Map Snapshot
-            Box(
-                modifier = Modifier
-                    .size(104.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF161F28))
-                    .border(0.6.dp, Color(0x40FFFFFF), RoundedCornerShape(4.dp))
-            ) {
-                if (uiState.mapSnapshot != null) {
-                    Image(
-                        bitmap = uiState.mapSnapshot!!.asImageBitmap(),
-                        contentDescription = "Live Satellite Map",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    // Fallback preview
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
-                        Text(
-                            "Google",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 6.dp, bottom = 4.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Right: Text Details
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.5.dp)
-            ) {
-                // Top Header Row with Logo Badge
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = headerString,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Mini Badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Color(0xCC0E1A29))
-                            .border(0.6.dp, CyanPrimary, RoundedCornerShape(3.dp))
-                            .padding(horizontal = 4.dp, vertical = 1.5.dp)
-                    ) {
-                        Text(
-                            text = "📷 GPS Map Camera",
-                            color = Color.White,
-                            fontSize = 7.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Street Address
-                Text(
-                    text = streetString,
-                    color = Color(0xFFD6E0EA),
-                    fontSize = 8.5.sp,
-                    lineHeight = 10.sp,
-                    maxLines = 1
-                )
-
-                // Lat & Long
-                Text(
-                    text = coordString,
-                    color = Color.White,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                // Plus Code
-                Text(
-                    text = "Plus Code : $plusCodeString",
-                    color = Color(0xFFB0BEC5),
-                    fontSize = 8.sp
-                )
-
-                // Date & Time + Temperature on same row (just like reference image!)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = dateText,
-                        color = Color.White,
-                        fontSize = 8.sp,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    Text(
-                        text = "${weather.weatherEmoji} ${String.format(Locale.US, "%.2f° C", weather.temperatureCelsius)}",
-                        color = Color(0xFFFFD54F),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Optional Custom Note if present
-                if (config.customTitle.isNotBlank() && config.customTitle != "GPS Map Camera") {
-                    Text(
-                        text = config.customTitle,
-                        color = Color(0xFFCFD8DC),
-                        fontSize = 7.5.sp,
-                        maxLines = 1
-                    )
-                }
-
-                // Person Name & Compass Heading on same row (just like reference image!)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Person Name : ${if (config.personName.isNotBlank()) config.personName else "-"}",
-                        color = Color(0xFFB0BEC5),
-                        fontSize = 8.sp
-                    )
-                    Text(
-                        text = "🧭 ${sensor.compassDegrees}° ${sensor.compassDirection}",
-                        color = Color(0xFF81D4FA),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                // Bottom Environmental Sensor Row (wind, humidity, pressure, magnetic)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "🍃 ${String.format(Locale.US, "%.2f km/h", weather.windSpeedKmh)}",
-                        color = Color(0xFFB0BEC5),
-                        fontSize = 7.5.sp
-                    )
-                    Text(
-                        text = "💧 ${weather.humidityPercent}%",
-                        color = Color(0xFFB0BEC5),
-                        fontSize = 7.5.sp
-                    )
-                    Text(
-                        text = "🧭 ${String.format(Locale.US, "%.0f hpa", sensor.pressureHpa)}",
-                        color = Color(0xFFB0BEC5),
-                        fontSize = 7.5.sp
-                    )
-                    Text(
-                        text = "🧲 ${String.format(Locale.US, "%.2f µT", sensor.magneticFieldMicroTesla)}",
-                        color = Color(0xFFB0BEC5),
-                        fontSize = 7.5.sp
-                    )
-                }
-            }
+        if (showTemplateSheet) {
+            TemplateChooserSheet(
+                currentStyle = stampConfig.style,
+                onSelectStyle = { style ->
+                    viewModel.setStampStyle(style)
+                },
+                onDismiss = { showTemplateSheet = false }
+            )
         }
     }
 }

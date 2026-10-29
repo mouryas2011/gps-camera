@@ -2,12 +2,15 @@ package com.geostamp.camera.ui.gallery
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,7 +56,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.geostamp.camera.data.model.CapturedPhoto
 import com.geostamp.camera.storage.MediaStoreHelper
+import com.geostamp.camera.ui.theme.AccentGreen
 import com.geostamp.camera.ui.theme.AccentRed
 import com.geostamp.camera.ui.theme.CyanPrimary
 import com.geostamp.camera.ui.theme.OnyxBackground
@@ -68,6 +76,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val BrandYellow = Color(0xFFFFCC00)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +88,9 @@ fun PhotoDetailScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    var imageScale by remember { mutableFloatStateOf(1f) }
+    var imageOffset by remember { mutableStateOf(Offset.Zero) }
 
     val formattedDate = remember(photo.timestamp) {
         val sdf = SimpleDateFormat("MMM dd, yyyy  hh:mm:ss a", Locale.getDefault())
@@ -106,9 +119,18 @@ fun PhotoDetailScreen(
     fun copyCoordinates() {
         if (photo.latitude != null && photo.longitude != null) {
             val coords = String.format(Locale.US, "%.6f, %.6f", photo.latitude, photo.longitude)
-            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("GPS Coordinates", coords))
             Toast.makeText(context, "Coordinates copied: $coords", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun copyAddress() {
+        val addr = photo.address
+        if (!addr.isNullOrBlank()) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("Photo Address", addr))
+            Toast.makeText(context, "Address copied to clipboard", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -169,15 +191,49 @@ fun PhotoDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Full Screen Image
-            AsyncImage(
-                model = photo.uri,
-                contentDescription = photo.displayName,
-                contentScale = ContentScale.Fit,
+            // Full Screen Zoomable & Pannable Image
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = 210.dp)
-            )
+                    .padding(bottom = 220.dp)
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            imageScale = (imageScale * zoom).coerceIn(1f, 5f)
+                            if (imageScale > 1f) {
+                                imageOffset += pan
+                            } else {
+                                imageOffset = Offset.Zero
+                            }
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                if (imageScale > 1f) {
+                                    imageScale = 1f
+                                    imageOffset = Offset.Zero
+                                } else {
+                                    imageScale = 2.5f
+                                }
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = photo.uri,
+                    contentDescription = photo.displayName,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = imageScale
+                            scaleY = imageScale
+                            translationX = imageOffset.x
+                            translationY = imageOffset.y
+                        }
+                )
+            }
 
             // Bottom Metadata Card
             Box(
@@ -185,9 +241,9 @@ fun PhotoDetailScreen(
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .background(Color(0xF0121820))
-                    .border(1.dp, Color(0xFF1F2B3A), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .padding(20.dp)
+                    .background(Color(0xF5101620))
+                    .border(1.dp, Color(0xFF1E2838), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .padding(18.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -200,10 +256,10 @@ fun PhotoDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "METADATA & GPS STAMP",
+                            text = "VERIFIED GPS STAMP METADATA",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = CyanPrimary,
+                            color = BrandYellow,
                             letterSpacing = 1.2.sp
                         )
 
@@ -226,7 +282,7 @@ fun PhotoDetailScreen(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "Copy Coords",
+                                            text = "Coords",
                                             color = Color.White,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold
@@ -312,12 +368,13 @@ fun PhotoDetailScreen(
                         Spacer(modifier = Modifier.height(10.dp))
                         MetadataRow(
                             icon = Icons.Default.LocationOn,
-                            title = "Resolved Address",
-                            value = photo.address
+                            title = "Resolved Address (Tap to copy)",
+                            value = photo.address,
+                            onClick = { copyAddress() }
                         )
                     }
 
-                    // File Details
+                    // Storage
                     Spacer(modifier = Modifier.height(10.dp))
                     MetadataRow(
                         icon = Icons.Default.Storage,
@@ -368,11 +425,14 @@ fun PhotoDetailScreen(
 private fun MetadataRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
-    value: String
+    value: String,
+    onClick: (() -> Unit)? = null
 ) {
     Row(
         verticalAlignment = Alignment.Top,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Box(
             modifier = Modifier
