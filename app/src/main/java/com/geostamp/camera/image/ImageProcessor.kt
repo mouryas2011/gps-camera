@@ -329,7 +329,7 @@ object ImageProcessor {
 
         val cardWidth = stampCardWidth(width, height, padding)
         val hasMap = config.showMapSnapshot && mapBitmap != null && !mapBitmap.isRecycled
-        val mapBoxSize = if (hasMap) 185f * scale else 0f
+        val mapBoxSize = if (hasMap) 105f * scale else 0f
         val textSectionWidth = if (hasMap) {
             cardWidth - mapBoxSize - (cardInnerPadding * 3)
         } else {
@@ -468,8 +468,8 @@ object ImageProcessor {
         canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, bgPaint)
         canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, borderPaint)
 
-        // Draw Map square on left if enabled
-        val mapLeft = cardLeft + cardInnerPadding
+        // Draw small map square on the right if enabled
+        val mapLeft = cardLeft + cardWidth - cardInnerPadding - mapBoxSize
         if (hasMap) {
             val mapTop = cardTop + (cardHeight - mapBoxSize) / 2f
             val mapRect = RectF(mapLeft, mapTop, mapLeft + mapBoxSize, mapTop + mapBoxSize)
@@ -482,9 +482,9 @@ object ImageProcessor {
             canvas.drawRect(mapRect, mapBorder)
         }
 
-        // Draw text details on right side
-        val textLeft = if (hasMap) mapLeft + mapBoxSize + cardInnerPadding else cardLeft + cardInnerPadding
-        val rightEdge = cardLeft + cardWidth - cardInnerPadding
+        // Draw text details on the left side
+        val textLeft = cardLeft + cardInnerPadding
+        val rightEdge = textLeft + textSectionWidth
         var currentY = cardTop + cardInnerPadding
 
         val headerFm = headerPaint.fontMetrics
@@ -572,9 +572,9 @@ object ImageProcessor {
             canvas.drawText(ellipsizeText(sensorText, sensorPaint, textSectionWidth), textLeft, currentY - sensorFm.ascent, sensorPaint)
         }
 
-        // Logo badge
+        // Logo badge (kept inside the text area so it never overlaps the right-side map)
         val logoBoxH = 26f * scale
-        val logoLeft = cardLeft + cardWidth - logoBoxW - cardInnerPadding
+        val logoLeft = textLeft + textSectionWidth - logoBoxW
         val logoTop = cardTop + 10f * scale
         val logoRect = RectF(logoLeft, logoTop, logoLeft + logoBoxW, logoTop + logoBoxH)
 
@@ -619,7 +619,7 @@ object ImageProcessor {
         val innerPad = 14f * scale
         val cardWidth = stampCardWidth(width, height, padding)
         val hasMap = config.showMapSnapshot && mapBitmap != null && !mapBitmap.isRecycled
-        val mapSize = if (hasMap) 120f * scale else 0f
+        val mapSize = if (hasMap) 95f * scale else 0f
 
         val cardHeight = max(mapSize, 108f * scale) + (innerPad * 2)
         val cardLeft = if (config.position == StampPosition.TOP_RIGHT || config.position == StampPosition.BOTTOM_RIGHT) {
@@ -646,9 +646,10 @@ object ImageProcessor {
         canvas.drawRoundRect(cardRect, 18f * scale, 18f * scale, bgPaint)
         canvas.drawRoundRect(cardRect, 18f * scale, 18f * scale, borderPaint)
 
-        // Map on left if enabled
+        // Small map on the right if enabled
         if (hasMap) {
-            val mapRect = RectF(cardLeft + innerPad, cardTop + innerPad, cardLeft + innerPad + mapSize, cardTop + innerPad + mapSize)
+            val mapRight = cardLeft + cardWidth - innerPad
+            val mapRect = RectF(mapRight - mapSize, cardTop + innerPad, mapRight, cardTop + innerPad + mapSize)
             canvas.drawBitmap(mapBitmap!!, null, mapRect, null)
             val circleBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#00E5FF")
@@ -658,7 +659,7 @@ object ImageProcessor {
             canvas.drawRect(mapRect, circleBorder)
         }
 
-        val textLeft = if (hasMap) cardLeft + innerPad + mapSize + (14f * scale) else cardLeft + innerPad
+        val textLeft = cardLeft + innerPad
         val maxW = if (hasMap) cardWidth - mapSize - (innerPad * 3) else cardWidth - (innerPad * 2)
         var curY = cardTop + innerPad + (6f * scale)
 
@@ -1159,7 +1160,11 @@ object ImageProcessor {
     }
 
     private fun stampCardWidth(width: Int, height: Int, padding: Float): Float {
-        return if (width > height) width * 0.42f else width - padding * 2
+        return if (width > height) {
+            width * 0.36f
+        } else {
+            width * 0.90f
+        }
     }
 
     private fun ellipsizeText(text: String, paint: Paint, maxWidth: Float): String {

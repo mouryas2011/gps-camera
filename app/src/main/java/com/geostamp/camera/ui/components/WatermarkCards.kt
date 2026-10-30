@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.geostamp.camera.data.model.StampConfig
@@ -50,6 +51,33 @@ import java.util.Date
 import java.util.Locale
 
 private val BrandYellow = Color(0xFFFFCC00)
+
+/**
+ * Watermark card width that adapts to the actual phone screen instead of a fixed dp.
+ * Portrait uses ~84% of screen width, landscape ~36%, both clamped to readable limits.
+ */
+@Composable
+private fun rememberResponsiveCardWidth(isLandscape: Boolean): Dp {
+    val cfg = LocalConfiguration.current
+    val widthDp = cfg.screenWidthDp.toFloat()
+    return if (isLandscape) {
+        (widthDp * 0.36f).coerceIn(250f, 360f).dp
+    } else {
+        (widthDp * 0.84f).coerceIn(260f, 380f).dp
+    }
+}
+
+/** Map thumbnail size relative to the smallest screen dimension, so it stays small on every phone. */
+@Composable
+private fun rememberResponsiveMapSize(isLandscape: Boolean): Dp {
+    val cfg = LocalConfiguration.current
+    val shortest = minOf(cfg.screenWidthDp, cfg.screenHeightDp).toFloat()
+    return if (isLandscape) {
+        (shortest * 0.12f).coerceIn(38f, 56f).dp
+    } else {
+        (shortest * 0.13f).coerceIn(44f, 64f).dp
+    }
+}
 
 @Composable
 private fun rememberLiveFormattedDate(pattern: String): String {
@@ -115,8 +143,8 @@ fun ClassicMapWatermarkCard(
     config: StampConfig
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val cardMaxWidth = if (isLandscape) 336.dp else 400.dp
-    val mapSize = if (isLandscape) 74.dp else 94.dp
+    val cardMaxWidth = rememberResponsiveCardWidth(isLandscape)
+    val mapSize = rememberResponsiveMapSize(isLandscape)
 
     val dateText = rememberLiveFormattedDate(config.dateTimePattern)
 
@@ -157,39 +185,7 @@ fun ClassicMapWatermarkCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: Real Satellite Map Snapshot (if enabled)
-            if (config.showMapSnapshot) {
-                Box(
-                    modifier = Modifier
-                        .size(mapSize)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xFF161F28))
-                        .border(0.6.dp, Color(0x40FFFFFF), RoundedCornerShape(4.dp))
-                ) {
-                    if (uiState.mapSnapshot != null) {
-                        Image(
-                            bitmap = uiState.mapSnapshot.asImageBitmap(),
-                            contentDescription = "Live Satellite Map",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
-                            Text(
-                                "Google",
-                                color = Color.White,
-                                fontSize = if (isLandscape) 9.sp else 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(start = 5.dp, bottom = 3.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(if (isLandscape) 6.dp else 8.dp))
-            }
-
-            // Right: Text Details
+            // Left: Text Details
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(if (isLandscape) 1.dp else 1.5.dp)
@@ -357,6 +353,37 @@ fun ClassicMapWatermarkCard(
                     }
                 }
             }
+
+            // Right: Real Satellite Map Snapshot (if enabled), small & responsive
+            if (config.showMapSnapshot) {
+                Spacer(modifier = Modifier.width(if (isLandscape) 5.dp else 7.dp))
+                Box(
+                    modifier = Modifier
+                        .size(mapSize)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xFF161F28))
+                        .border(0.6.dp, Color(0x40FFFFFF), RoundedCornerShape(4.dp))
+                ) {
+                    if (uiState.mapSnapshot != null) {
+                        Image(
+                            bitmap = uiState.mapSnapshot.asImageBitmap(),
+                            contentDescription = "Live Satellite Map",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+                            Text(
+                                "Google",
+                                color = Color.White,
+                                fontSize = if (isLandscape) 8.sp else 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -368,7 +395,8 @@ fun ModernMinimalWatermarkCard(
     config: StampConfig
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val cardMaxWidth = if (isLandscape) 336.dp else 380.dp
+    val cardMaxWidth = rememberResponsiveCardWidth(isLandscape)
+    val mapSize = rememberResponsiveMapSize(isLandscape)
 
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
@@ -391,18 +419,6 @@ fun ModernMinimalWatermarkCard(
             .padding(if (isLandscape) 8.dp else 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (config.showMapSnapshot && uiState.mapSnapshot != null) {
-                Image(
-                    bitmap = uiState.mapSnapshot.asImageBitmap(),
-                    contentDescription = "Map Mini",
-                    modifier = Modifier
-                        .size(if (isLandscape) 46.dp else 54.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, CyanPrimary, RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
             Column(modifier = Modifier.weight(1f)) {
                 if (config.showCoordinates) {
                     Text(
@@ -438,6 +454,20 @@ fun ModernMinimalWatermarkCard(
                     )
                 }
             }
+
+            // Right: small responsive map thumbnail
+            if (config.showMapSnapshot && uiState.mapSnapshot != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Image(
+                    bitmap = uiState.mapSnapshot.asImageBitmap(),
+                    contentDescription = "Map Mini",
+                    modifier = Modifier
+                        .size(mapSize)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, CyanPrimary, RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
         }
     }
 }
@@ -449,7 +479,7 @@ fun SurveyorGridWatermarkCard(
     config: StampConfig
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val cardMaxWidth = if (isLandscape) 336.dp else 400.dp
+    val cardMaxWidth = rememberResponsiveCardWidth(isLandscape)
 
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
@@ -547,7 +577,7 @@ fun FrostedGlassWatermarkCard(
     config: StampConfig
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val cardMaxWidth = if (isLandscape) 336.dp else 380.dp
+    val cardMaxWidth = rememberResponsiveCardWidth(isLandscape)
 
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
@@ -638,7 +668,7 @@ fun HighContrastDarkWatermarkCard(
     config: StampConfig
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val cardMaxWidth = if (isLandscape) 336.dp else 380.dp
+    val cardMaxWidth = rememberResponsiveCardWidth(isLandscape)
 
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
@@ -725,7 +755,7 @@ fun CleanOutlineWatermarkCard(
     config: StampConfig
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val cardMaxWidth = if (isLandscape) 336.dp else 380.dp
+    val cardMaxWidth = rememberResponsiveCardWidth(isLandscape)
 
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
