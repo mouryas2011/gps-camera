@@ -61,11 +61,12 @@ jobs:
             ## GeoStamp Camera ${{ github.ref_name }}
             
             ### Included Features:
+            - Premium GPS map watermark: satellite thumbnail with red pin + blue accuracy circle beside a semi-transparent info panel
             - Live viewfinder with real-time GPS locking badge
-            - High-resolution camera capture with CameraX
-            - Auto date, time, coordinates, accuracy, altitude, and address burn-in stamp
-            - Configurable watermark positions and styling presets
-            - Scoped storage photo management and native sharing
+            - High-resolution CameraX capture with the watermark baked into the full-resolution photo
+            - Dynamic city/state/country + flag, full street address, lat/long, and capture-time timestamp with timezone
+            - Customization: position, horizontal/vertical layout, watermark size, font size, font colour, background transparency, map on/off, and per-field toggles
+            - Six watermark styles, scoped storage photo management, and native sharing
             - 100% on-device privacy
             
             **Download the attached APK below to install on any Android 8.0+ (API 26+) device.**

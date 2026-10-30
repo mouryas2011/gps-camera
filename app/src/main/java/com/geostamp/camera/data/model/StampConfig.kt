@@ -84,7 +84,7 @@ data class StampConfig(
     val companyName: String = "",
     val notes: String = "",
     val coordinateFormat: CoordinateFormat = CoordinateFormat.DECIMAL,
-    val dateTimePattern: String = "EEEE, dd/MM/yyyy hh:mm a 'GMT' XXX"
+    val dateTimePattern: String = "EEEE, dd/MM/yyyy hh:mm a 'GMT'XXX"
 ) {
     companion object {
         fun formatNoteLine(config: StampConfig): String {
@@ -109,21 +109,25 @@ data class StampConfig(
         }
 
         fun formatDateTime(timestampMillis: Long, pattern: String): String {
-            val effectivePattern = if (pattern.endsWith("'GMT' Z")) {
-                pattern.removeSuffix("'GMT' Z") + "'GMT' XXX"
-            } else {
-                pattern
+            // Normalise older stored patterns so the timezone always renders as
+            // "GMT+05:30" instead of the ambiguous "GMT +05:30".
+            val effectivePattern = when {
+                pattern.endsWith("'GMT' Z") -> pattern.removeSuffix("'GMT' Z") + "'GMT'XXX"
+                pattern.endsWith("'GMT' XXX") -> pattern.removeSuffix("'GMT' XXX") + "'GMT'XXX"
+                else -> pattern
             }
             val sdf = try {
                 SimpleDateFormat(effectivePattern, Locale.getDefault()).apply {
                     timeZone = TimeZone.getDefault()
                 }
             } catch (_: Exception) {
-                SimpleDateFormat("EEEE, dd/MM/yyyy hh:mm a 'GMT' XXX", Locale.getDefault()).apply {
+                SimpleDateFormat("EEEE, dd/MM/yyyy hh:mm a 'GMT'XXX", Locale.getDefault()).apply {
                     timeZone = TimeZone.getDefault()
                 }
             }
-            return sdf.format(Date(timestampMillis))
+            val formatted = sdf.format(Date(timestampMillis))
+            // SimpleDateFormat renders UTC as "Z"; show an explicit numeric offset.
+            return formatted.replace("GMTZ", "GMT+00:00")
         }
 
         fun formatCoordinates(

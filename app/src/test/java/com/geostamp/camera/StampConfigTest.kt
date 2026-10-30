@@ -95,7 +95,21 @@ class StampConfigTest {
     @Test
     fun testDateTimeFormattingUsesOffset() {
         val formatted = StampConfig.formatDateTime(1790000000000L, StampConfig().dateTimePattern)
-        assertTrue("Should include GMT label", formatted.contains("GMT"))
-        assertTrue("Should include a timezone offset", formatted.contains("+") || formatted.contains("-"))
+        assertTrue(
+            "Should end with a numeric GMT offset, was: $formatted",
+            Regex("GMT[+-]\\d{2}:\\d{2}$").containsMatchIn(formatted)
+        )
+    }
+
+    @Test
+    fun testDateTimeFormattingNormalisesLegacyPattern() {
+        val legacy = StampConfig.formatDateTime(
+            1790000000000L,
+            "EEEE, dd/MM/yyyy hh:mm a 'GMT' Z"
+        )
+        assertTrue(
+            "Legacy pattern should render a numeric GMT offset, was: $legacy",
+            Regex("GMT[+-]\\d{2}:\\d{2}$").containsMatchIn(legacy)
+        )
     }
 }

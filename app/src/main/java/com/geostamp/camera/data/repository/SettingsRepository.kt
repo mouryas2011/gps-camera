@@ -205,8 +205,8 @@ class SettingsRepository(context: Context) {
                 companyName = prefs.getString("company_name", "") ?: "",
                 notes = prefs.getString("notes", "") ?: "",
                 coordinateFormat = coordFormat,
-                dateTimePattern = prefs.getString("datetime_pattern", "EEEE, dd/MM/yyyy hh:mm a 'GMT' XXX")
-                    ?: "EEEE, dd/MM/yyyy hh:mm a 'GMT' XXX"
+                dateTimePattern = prefs.getString("datetime_pattern", "EEEE, dd/MM/yyyy hh:mm a 'GMT'XXX")
+                    ?: "EEEE, dd/MM/yyyy hh:mm a 'GMT'XXX"
             )
         }
     }
