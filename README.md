@@ -1,4 +1,4 @@
-# GPS Map Camera 📷📍
+# GeoStamp Camera 📷📍
 
 A modern, native Android camera application built with **Jetpack Compose**, **CameraX**, and **Kotlin** that captures full-resolution photos with a live date/time, GPS coordinates, accuracy, altitude, and reverse-geocoded address stamped directly onto the saved image.
 
@@ -79,13 +79,13 @@ export ANDROID_HOME="/path/to/android-sdk"
 1. Transfer `app-debug.apk` to your Android device via USB, Google Drive, or direct download.
 2. Open the file on your device.
 3. If prompted, allow **Install from unknown sources** for your file manager or browser.
-4. Launch **GPS Map Camera** and grant Camera and Location permissions when prompted.
+4. Launch **GeoStamp Camera** and grant Camera and Location permissions when prompted.
 
 ---
 
 ## 🔒 Permissions & Privacy Model
 
-GPS Map Camera requests only the minimum essential runtime permissions:
+GeoStamp Camera requests only the minimum essential runtime permissions:
 
 | Permission | Purpose |
 | :--- | :--- |
@@ -96,7 +96,7 @@ GPS Map Camera requests only the minimum essential runtime permissions:
 > **Privacy Guarantee**:
 > - **No Background Location**: Location is only accessed in the foreground while the camera is active.
 > - **No Third-Party Trackers**: No analytics or telemetry libraries are included.
-> - **Modern Scoped Storage**: Images are saved directly into `Pictures/GPS Map Camera` via MediaStore. No broad filesystem access is requested.
+> - **Modern Scoped Storage**: Images are saved directly into `Pictures/GeoStamp Camera` via MediaStore. No broad filesystem access is requested.
 
 ---
 

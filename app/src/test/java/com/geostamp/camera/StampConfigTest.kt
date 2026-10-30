@@ -55,7 +55,7 @@ class StampConfigTest {
     @Test
     fun testDefaultConfigIntegrity() {
         val config = StampConfig()
-        assertEquals(StampPosition.BOTTOM_LEFT, config.position)
+        assertEquals(StampPosition.BOTTOM_RIGHT, config.position)
         assertEquals(StampStyle.CLASSIC_MAP_BADGE, config.style)
         assertTrue(config.showDateTime)
         assertTrue(config.showCoordinates)
@@ -64,6 +64,6 @@ class StampConfigTest {
         assertTrue(config.showAltitude)
         assertTrue(config.showMapSnapshot)
         assertTrue(config.showWeather)
-        assertEquals("GPS Map Camera", config.customTitle)
+        assertEquals("GeoStamp Camera", config.customTitle)
     }
 }

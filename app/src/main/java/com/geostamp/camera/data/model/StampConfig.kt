@@ -11,7 +11,7 @@ enum class StampPosition {
 }
 
 enum class StampStyle {
-    CLASSIC_MAP_BADGE, // Classic GPS Map Camera reference layout with Map on left and info on right
+    CLASSIC_MAP_BADGE, // Classic GeoStamp Camera reference layout with map on the right and info on the left
     MODERN_MINIMAL,    // Sleek modern card with rounded mini-map, clean typography & climate pill
     SURVEYOR_GRID,     // Technical inspection/engineering table grid with boxed metadata cells
     FROSTED_GLASS,     // Translucent dark glass badge with neon cyan accent border
@@ -31,7 +31,7 @@ enum class CoordinateFormat {
 }
 
 data class StampConfig(
-    val position: StampPosition = StampPosition.BOTTOM_LEFT,
+    val position: StampPosition = StampPosition.BOTTOM_RIGHT,
     val style: StampStyle = StampStyle.CLASSIC_MAP_BADGE,
     val aspectRatio: AspectRatioOption = AspectRatioOption.RATIO_4_3,
     val showDateTime: Boolean = true,
@@ -45,7 +45,7 @@ data class StampConfig(
     val showCompass: Boolean = true,
     val showSensors: Boolean = true,
     val showCustomTitle: Boolean = true,
-    val customTitle: String = "GPS Map Camera",
+    val customTitle: String = "GeoStamp Camera",
     val personName: String = "-",
     val companyName: String = "",
     val notes: String = "",

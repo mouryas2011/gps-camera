@@ -329,7 +329,7 @@ fun CameraScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "GPS Map Camera needs camera and location access to capture photos with verified GPS coordinates and addresses.",
+                        text = "GeoStamp Camera needs camera and location access to capture photos with verified GPS coordinates and addresses.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.LightGray
                     )

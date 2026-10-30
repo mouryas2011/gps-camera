@@ -18,7 +18,7 @@ import java.util.Locale
 
 object MediaStoreHelper {
 
-    private const val ALBUM_NAME = "GPS Map Camera"
+    private const val ALBUM_NAME = "GeoStamp Camera"
     private val memoryCache = mutableListOf<CapturedPhoto>()
 
     suspend fun savePhoto(
@@ -229,7 +229,7 @@ object MediaStoreHelper {
             type = "image/jpeg"
             putExtra(Intent.EXTRA_STREAM, photo.uri)
             val textNote = buildString {
-                append("Captured with GPS Map Camera\n")
+                append("Captured with GeoStamp Camera\n")
                 if (photo.latitude != null && photo.longitude != null) {
                     append(String.format(Locale.US, "GPS: %.6f, %.6f\n", photo.latitude, photo.longitude))
                 }

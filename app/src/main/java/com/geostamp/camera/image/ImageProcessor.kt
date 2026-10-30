@@ -324,7 +324,7 @@ object ImageProcessor {
         val scale = max(1.0f, minDim / 1080f)
 
         val padding = 20f * scale
-        val cardInnerPadding = 14f * scale
+        val cardInnerPadding = 11f * scale
         val cornerRadius = 12f * scale
 
         val cardWidth = stampCardWidth(width, height, padding)
@@ -372,14 +372,14 @@ object ImageProcessor {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
 
-        val lineSpacing = 6f * scale
+        val lineSpacing = 4.5f * scale
         val logoBoxW = 125f * scale
         val headerMaxW = textSectionWidth - logoBoxW - (8f * scale)
         val rawHeader = when {
             config.showAddress && !detailedAddress?.shortHeader.isNullOrBlank() -> detailedAddress!!.shortHeader
             config.showCustomTitle && config.customTitle.isNotBlank() -> config.customTitle
             coordStr != null -> coordStr
-            else -> "GPS Map Camera"
+            else -> "GeoStamp Camera"
         }
         val headerText = ellipsizeText(rawHeader, headerPaint, headerMaxW)
 
@@ -402,7 +402,7 @@ object ImageProcessor {
         val plusAndAccLine = accAltParts.joinToString("  •  ")
 
         val extraTagParts = mutableListOf<String>()
-        if (config.showCustomTitle && config.customTitle.isNotBlank() && config.customTitle != "GPS Map Camera" && rawHeader != config.customTitle) {
+        if (config.showCustomTitle && config.customTitle.isNotBlank() && config.customTitle != "GeoStamp Camera" && rawHeader != config.customTitle) {
             extraTagParts.add(config.customTitle)
         }
         if (config.companyName.isNotBlank()) {
@@ -595,7 +595,7 @@ object ImageProcessor {
             textSize = 10f * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        canvas.drawText("📷 GPS Map Camera", logoLeft + 6f * scale, logoTop + 17f * scale, logoTextPaint)
+        canvas.drawText("📷 GeoStamp Camera", logoLeft + 6f * scale, logoTop + 17f * scale, logoTextPaint)
     }
 
     // 2. MODERN MINIMAL
@@ -615,8 +615,8 @@ object ImageProcessor {
         val minDim = min(width, height).toFloat()
         val scale = max(1.0f, minDim / 1080f)
 
-        val padding = 24f * scale
-        val innerPad = 14f * scale
+        val padding = 20f * scale
+        val innerPad = 12f * scale
         val cardWidth = stampCardWidth(width, height, padding)
         val hasMap = config.showMapSnapshot && mapBitmap != null && !mapBitmap.isRecycled
         val mapSize = if (hasMap) 95f * scale else 0f
@@ -723,7 +723,7 @@ object ImageProcessor {
 
         val padding = 20f * scale
         val cardWidth = stampCardWidth(width, height, padding)
-        val rowHeight = 38f * scale
+        val rowHeight = 34f * scale
         val totalRows = 4
         val cardHeight = rowHeight * totalRows
 
@@ -783,7 +783,7 @@ object ImageProcessor {
 
         // Row 1: Left = Project, Right = Inspector
         val projTitle = buildString {
-            append(if (config.customTitle.isNotBlank()) config.customTitle else "GPS Map Camera")
+            append(if (config.customTitle.isNotBlank()) config.customTitle else "GeoStamp Camera")
             if (config.companyName.isNotBlank()) append(" (${config.companyName})")
         }
         val projLabelW = labelPaint.measureText("PROJECT: ")
@@ -901,8 +901,8 @@ object ImageProcessor {
     ) {
         val minDim = min(width, height).toFloat()
         val scale = max(1.0f, minDim / 1080f)
-        val padding = 24f * scale
-        val innerPad = 16f * scale
+        val padding = 20f * scale
+        val innerPad = 13f * scale
         val cardWidth = stampCardWidth(width, height, padding)
         val textMaxWidth = cardWidth - (innerPad * 2) - (16f * scale)
 
@@ -950,11 +950,11 @@ object ImageProcessor {
             }
         }
         if (lines.isEmpty()) {
-            lines.add("GPS MAP CAMERA" to titlePaint)
+            lines.add("GEOSTAMP CAMERA" to titlePaint)
         }
 
         var totalH = 0f
-        val lineSpacing = 6f * scale
+        val lineSpacing = 4.5f * scale
         for ((_, p) in lines) {
             totalH += (p.fontMetrics.descent - p.fontMetrics.ascent) + lineSpacing
         }
@@ -1013,8 +1013,8 @@ object ImageProcessor {
     ) {
         val minDim = min(width, height).toFloat()
         val scale = max(1.0f, minDim / 1080f)
-        val padding = 20f * scale
-        val innerPad = 14f * scale
+        val padding = 16f * scale
+        val innerPad = 12f * scale
         val cardWidth = stampCardWidth(width, height, padding)
         val textMaxWidth = cardWidth - (innerPad * 2)
 
@@ -1061,11 +1061,11 @@ object ImageProcessor {
             }
         }
         if (lines.isEmpty()) {
-            lines.add("GPS MAP CAMERA" to headerPaint)
+            lines.add("GEOSTAMP CAMERA" to headerPaint)
         }
 
         var totalH = 0f
-        val lineSpacing = 6f * scale
+        val lineSpacing = 4.5f * scale
         for ((_, p) in lines) {
             totalH += (p.fontMetrics.descent - p.fontMetrics.ascent) + lineSpacing
         }
@@ -1111,7 +1111,7 @@ object ImageProcessor {
     ) {
         val minDim = min(width, height).toFloat()
         val scale = max(1.0f, minDim / 1080f)
-        val padding = 28f * scale
+        val padding = 22f * scale
         val maxTextWidth = width - (padding * 2)
         val isRightAligned = config.position == StampPosition.TOP_RIGHT || config.position == StampPosition.BOTTOM_RIGHT
 
@@ -1139,7 +1139,7 @@ object ImageProcessor {
         if (lines.isEmpty()) return
 
         val lineHeight = fillPaint.fontMetrics.descent - fillPaint.fontMetrics.ascent
-        val lineSpacing = 8f * scale
+        val lineSpacing = 6f * scale
         val totalHeight = lines.size * (lineHeight + lineSpacing)
 
         var curY = if (config.position == StampPosition.TOP_LEFT || config.position == StampPosition.TOP_RIGHT) {
@@ -1161,9 +1161,9 @@ object ImageProcessor {
 
     private fun stampCardWidth(width: Int, height: Int, padding: Float): Float {
         return if (width > height) {
-            width * 0.36f
+            width * 0.40f
         } else {
-            width * 0.90f
+            width * 0.92f
         }
     }
 
@@ -1244,7 +1244,7 @@ object ImageProcessor {
                 exif.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, address)
             }
 
-            exif.setAttribute(ExifInterface.TAG_MAKE, "GPS Map Camera")
+            exif.setAttribute(ExifInterface.TAG_MAKE, "GeoStamp Camera")
             exif.setAttribute(ExifInterface.TAG_MODEL, "GeoStamp Android")
 
             exif.saveAttributes()

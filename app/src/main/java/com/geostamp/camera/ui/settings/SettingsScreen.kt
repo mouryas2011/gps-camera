@@ -197,7 +197,7 @@ fun SettingsScreen(
             SectionTitle("STAMP VISUAL STYLE")
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StyleSelectorItem(
-                    title = "Classic GPS Map Camera",
+                    title = "Classic GeoStamp Camera",
                     desc = "Square satellite map badge with red pin, Plus Code, weather & sensors",
                     isSelected = config.style == StampStyle.CLASSIC_MAP_BADGE
                 ) { update(config.copy(style = StampStyle.CLASSIC_MAP_BADGE)) }

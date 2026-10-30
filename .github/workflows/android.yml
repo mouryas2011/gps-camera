@@ -58,7 +58,7 @@ jobs:
           files: ${{ steps.locate_apk.outputs.apk_path }}
           name: "Release ${{ github.ref_name }}"
           body: |
-            ## GPS Map Camera ${{ github.ref_name }}
+            ## GeoStamp Camera ${{ github.ref_name }}
             
             ### Included Features:
             - Live viewfinder with real-time GPS locking badge

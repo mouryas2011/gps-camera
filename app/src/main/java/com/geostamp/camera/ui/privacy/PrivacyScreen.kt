@@ -134,7 +134,7 @@ fun PrivacyScreen(onNavigateBack: () -> Unit) {
             PrivacyPoint(
                 icon = Icons.Default.CloudOff,
                 title = "Zero Cloud Uploads & No Tracking",
-                description = "GPS Map Camera has no user accounts, no analytics, no ads, and no telemetry SDKs. Neither your photos nor your coordinates are ever transmitted over the network."
+                description = "GeoStamp Camera has no user accounts, no analytics, no ads, and no telemetry SDKs. Neither your photos nor your coordinates are ever transmitted over the network."
             )
 
             Spacer(modifier = Modifier.height(14.dp))

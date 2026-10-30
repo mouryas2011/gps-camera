@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">GPS Map Camera</string>
+    <string name="app_name">GeoStamp Camera</string>
     <string name="permission_camera_rationale">Camera permission is required to capture photos.</string>
     <string name="permission_location_rationale">Location permission is required to add accurate GPS coordinates to your photo stamp.</string>
     <string name="grant_permissions">Grant Permissions</string>

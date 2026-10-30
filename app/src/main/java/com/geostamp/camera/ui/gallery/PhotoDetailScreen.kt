@@ -379,7 +379,7 @@ fun PhotoDetailScreen(
                     MetadataRow(
                         icon = Icons.Default.Storage,
                         title = "Storage",
-                        value = "$formattedFileSize  •  Pictures/GPS Map Camera"
+                        value = "$formattedFileSize  •  Pictures/GeoStamp Camera"
                     )
                 }
             }

@@ -61,9 +61,9 @@ private fun rememberResponsiveCardWidth(isLandscape: Boolean): Dp {
     val cfg = LocalConfiguration.current
     val widthDp = cfg.screenWidthDp.toFloat()
     return if (isLandscape) {
-        (widthDp * 0.36f).coerceIn(250f, 360f).dp
+        (widthDp * 0.40f).coerceIn(270f, 400f).dp
     } else {
-        (widthDp * 0.84f).coerceIn(260f, 380f).dp
+        (widthDp * 0.92f).coerceIn(280f, 410f).dp
     }
 }
 
@@ -179,7 +179,7 @@ fun ClassicMapWatermarkCard(
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xD905080E))
             .border(0.8.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp))
-            .padding(if (isLandscape) 5.dp else 6.dp)
+            .padding(if (isLandscape) 4.dp else 5.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -188,7 +188,7 @@ fun ClassicMapWatermarkCard(
             // Left: Text Details
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(if (isLandscape) 1.dp else 1.5.dp)
+                verticalArrangement = Arrangement.spacedBy(if (isLandscape) 0.dp else 0.5.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -213,7 +213,7 @@ fun ClassicMapWatermarkCard(
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
                         Text(
-                            text = "📷 GPS Map Camera",
+                            text = "📷 GeoStamp Camera",
                             color = Color.White,
                             fontSize = if (isLandscape) 6.5.sp else 7.sp,
                             fontWeight = FontWeight.Bold
@@ -288,7 +288,7 @@ fun ClassicMapWatermarkCard(
                 }
 
                 val tagParts = buildList {
-                    if (config.showCustomTitle && config.customTitle.isNotBlank() && config.customTitle != "GPS Map Camera") add(config.customTitle)
+                    if (config.showCustomTitle && config.customTitle.isNotBlank() && config.customTitle != "GeoStamp Camera") add(config.customTitle)
                     if (config.companyName.isNotBlank()) add(config.companyName)
                     if (config.notes.isNotBlank()) add(config.notes)
                 }
@@ -416,7 +416,7 @@ fun ModernMinimalWatermarkCard(
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xE60A0E16))
             .border(1.dp, Color(0x6000E5FF), RoundedCornerShape(12.dp))
-            .padding(if (isLandscape) 8.dp else 10.dp)
+            .padding(if (isLandscape) 7.dp else 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -490,7 +490,7 @@ fun SurveyorGridWatermarkCard(
         else "Acquiring..."
     }
     val dateText = rememberLiveFormattedDate(config.dateTimePattern)
-    val project = if (config.customTitle.isNotBlank()) config.customTitle else "GPS Map Camera"
+    val project = if (config.customTitle.isNotBlank()) config.customTitle else "GeoStamp Camera"
     val inspector = if (config.personName.isNotBlank() && config.personName != "-") config.personName else "Inspector"
 
     Box(
@@ -596,7 +596,7 @@ fun FrostedGlassWatermarkCard(
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xD90D1520))
             .border(1.2.dp, Color(0x9900E5FF), RoundedCornerShape(12.dp))
-            .padding(if (isLandscape) 8.dp else 10.dp)
+            .padding(if (isLandscape) 7.dp else 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -687,7 +687,7 @@ fun HighContrastDarkWatermarkCard(
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFA040608))
             .border(1.dp, Color(0xFF263238), RoundedCornerShape(8.dp))
-            .padding(if (isLandscape) 8.dp else 10.dp)
+            .padding(if (isLandscape) 7.dp else 8.dp)
     ) {
         Column {
             if (config.showCustomTitle && config.customTitle.isNotBlank()) {
@@ -770,7 +770,7 @@ fun CleanOutlineWatermarkCard(
     Column(
         modifier = Modifier
             .widthIn(max = cardMaxWidth)
-            .padding(6.dp)
+            .padding(5.dp)
     ) {
         if (config.showCustomTitle && config.customTitle.isNotBlank()) {
             Text(

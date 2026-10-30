@@ -75,15 +75,29 @@ class SettingsRepository(context: Context) {
         }
 
         private fun loadConfigFromPrefs(prefs: SharedPreferences): StampConfig {
-            val positionStr = prefs.getString("stamp_position", StampPosition.BOTTOM_LEFT.name)
+            val rebranded = prefs.getBoolean("rebrand_migrated", false)
+            val positionStr = prefs.getString("stamp_position", StampPosition.BOTTOM_RIGHT.name)
             val styleStr = prefs.getString("stamp_style", StampStyle.CLASSIC_MAP_BADGE.name)
             val coordFormatStr = prefs.getString("coord_format", CoordinateFormat.DECIMAL.name)
             val aspectStr = prefs.getString("aspect_ratio", AspectRatioOption.RATIO_4_3.name)
 
-            val position = try {
-                StampPosition.valueOf(positionStr ?: StampPosition.BOTTOM_LEFT.name)
+            var position = try {
+                StampPosition.valueOf(positionStr ?: StampPosition.BOTTOM_RIGHT.name)
             } catch (_: Exception) {
-                StampPosition.BOTTOM_LEFT
+                StampPosition.BOTTOM_RIGHT
+            }
+
+            var customTitle = prefs.getString("custom_title", "GeoStamp Camera") ?: "GeoStamp Camera"
+
+            if (!rebranded) {
+                // One-time rebrand migration: old default stamp was bottom-left and titled "GeoStamp Camera"
+                if (position == StampPosition.BOTTOM_LEFT) position = StampPosition.BOTTOM_RIGHT
+                if (customTitle == "GeoStamp Camera") customTitle = "GeoStamp Camera"
+                prefs.edit()
+                    .putBoolean("rebrand_migrated", true)
+                    .putString("stamp_position", position.name)
+                    .putString("custom_title", customTitle)
+                    .apply()
             }
 
             val style = try {
@@ -119,7 +133,7 @@ class SettingsRepository(context: Context) {
                 showCompass = prefs.getBoolean("show_compass", true),
                 showSensors = prefs.getBoolean("show_sensors", true),
                 showCustomTitle = prefs.getBoolean("show_custom_title", true),
-                customTitle = prefs.getString("custom_title", "GPS Map Camera") ?: "GPS Map Camera",
+                customTitle = customTitle,
                 personName = prefs.getString("person_name", "-") ?: "-",
                 companyName = prefs.getString("company_name", "") ?: "",
                 notes = prefs.getString("notes", "") ?: "",

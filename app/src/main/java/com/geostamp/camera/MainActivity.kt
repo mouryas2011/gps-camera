@@ -5,15 +5,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.geostamp.camera.data.model.CapturedPhoto
+import com.geostamp.camera.ui.SplashScreen
 import com.geostamp.camera.ui.camera.CameraScreen
 import com.geostamp.camera.ui.camera.CameraViewModel
 import com.geostamp.camera.ui.gallery.GalleryScreen
@@ -40,11 +44,23 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             GPSMapCameraTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = OnyxBackground
-                ) {
-                    AppNavigation(cameraViewModel)
+                var splashFinished by rememberSaveable { mutableStateOf(false) }
+
+                Crossfade(
+                    targetState = splashFinished,
+                    animationSpec = tween(durationMillis = 400),
+                    label = "SplashTransition"
+                ) { finished ->
+                    if (!finished) {
+                        SplashScreen(onFinished = { splashFinished = true })
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = OnyxBackground
+                        ) {
+                            AppNavigation(cameraViewModel)
+                        }
+                    }
                 }
             }
         }
