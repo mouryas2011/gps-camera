@@ -1,5 +1,6 @@
 package com.geostamp.camera.ui.components
 
+import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +33,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.geostamp.camera.data.model.StampConfig
@@ -110,6 +114,10 @@ fun ClassicMapWatermarkCard(
     uiState: CameraUiState,
     config: StampConfig
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val cardMaxWidth = if (isLandscape) 336.dp else 400.dp
+    val mapSize = if (isLandscape) 74.dp else 94.dp
+
     val dateText = rememberLiveFormattedDate(config.dateTimePattern)
 
     val loc = when (val s = uiState.locationState) {
@@ -138,11 +146,12 @@ fun ClassicMapWatermarkCard(
 
     Box(
         modifier = Modifier
+            .widthIn(max = cardMaxWidth)
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xD905080E))
             .border(0.8.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp))
-            .padding(6.dp)
+            .padding(if (isLandscape) 5.dp else 6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -152,7 +161,7 @@ fun ClassicMapWatermarkCard(
             if (config.showMapSnapshot) {
                 Box(
                     modifier = Modifier
-                        .size(104.dp)
+                        .size(mapSize)
                         .clip(RoundedCornerShape(4.dp))
                         .background(Color(0xFF161F28))
                         .border(0.6.dp, Color(0x40FFFFFF), RoundedCornerShape(4.dp))
@@ -169,21 +178,21 @@ fun ClassicMapWatermarkCard(
                             Text(
                                 "Google",
                                 color = Color.White,
-                                fontSize = 11.sp,
+                                fontSize = if (isLandscape) 9.sp else 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(start = 6.dp, bottom = 4.dp)
+                                modifier = Modifier.padding(start = 5.dp, bottom = 3.dp)
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(if (isLandscape) 6.dp else 8.dp))
             }
 
             // Right: Text Details
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.5.dp)
+                verticalArrangement = Arrangement.spacedBy(if (isLandscape) 1.dp else 1.5.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -193,9 +202,10 @@ fun ClassicMapWatermarkCard(
                     Text(
                         text = headerString,
                         color = Color.White,
-                        fontSize = 11.sp,
+                        fontSize = if (isLandscape) 10.sp else 11.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -204,12 +214,12 @@ fun ClassicMapWatermarkCard(
                             .clip(RoundedCornerShape(3.dp))
                             .background(Color(0xCC0E1A29))
                             .border(0.6.dp, CyanPrimary, RoundedCornerShape(3.dp))
-                            .padding(horizontal = 4.dp, vertical = 1.5.dp)
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
                         Text(
                             text = "📷 GPS Map Camera",
                             color = Color.White,
-                            fontSize = 7.sp,
+                            fontSize = if (isLandscape) 6.5.sp else 7.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -219,9 +229,10 @@ fun ClassicMapWatermarkCard(
                     Text(
                         text = streetString,
                         color = Color(0xFFD6E0EA),
-                        fontSize = 8.5.sp,
-                        lineHeight = 10.sp,
-                        maxLines = 1
+                        fontSize = if (isLandscape) 7.5.sp else 8.5.sp,
+                        lineHeight = 9.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -229,8 +240,10 @@ fun ClassicMapWatermarkCard(
                     Text(
                         text = coordString,
                         color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = if (isLandscape) 8.sp else 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -243,8 +256,9 @@ fun ClassicMapWatermarkCard(
                     Text(
                         text = accPlusParts.joinToString(" • "),
                         color = Color(0xFFB0BEC5),
-                        fontSize = 8.sp,
-                        maxLines = 1
+                        fontSize = if (isLandscape) 7.sp else 8.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -258,8 +272,9 @@ fun ClassicMapWatermarkCard(
                             Text(
                                 text = dateText,
                                 color = Color.White,
-                                fontSize = 8.sp,
+                                fontSize = if (isLandscape) 7.sp else 8.sp,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
                         } else {
@@ -269,7 +284,7 @@ fun ClassicMapWatermarkCard(
                             Text(
                                 text = "${weather.weatherEmoji} ${String.format(Locale.US, "%.2f° C", weather.temperatureCelsius)}",
                                 color = Color(0xFFFFD54F),
-                                fontSize = 8.sp,
+                                fontSize = if (isLandscape) 7.sp else 8.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -285,8 +300,9 @@ fun ClassicMapWatermarkCard(
                     Text(
                         text = tagParts.joinToString(" • "),
                         color = Color(0xFFCFD8DC),
-                        fontSize = 7.5.sp,
-                        maxLines = 1
+                        fontSize = if (isLandscape) 7.sp else 7.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -298,13 +314,15 @@ fun ClassicMapWatermarkCard(
                     Text(
                         text = "Person Name : ${if (config.personName.isNotBlank()) config.personName else "-"}",
                         color = Color(0xFFB0BEC5),
-                        fontSize = 8.sp
+                        fontSize = if (isLandscape) 7.sp else 8.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (config.showCompass || config.showSensors) {
                         Text(
                             text = "🧭 ${sensor.compassDegrees}° ${sensor.compassDirection}",
                             color = Color(0xFF81D4FA),
-                            fontSize = 8.sp,
+                            fontSize = if (isLandscape) 7.sp else 8.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -319,22 +337,22 @@ fun ClassicMapWatermarkCard(
                         Text(
                             text = "🍃 ${String.format(Locale.US, "%.2f km/h", weather.windSpeedKmh)}",
                             color = Color(0xFFB0BEC5),
-                            fontSize = 7.5.sp
+                            fontSize = if (isLandscape) 6.5.sp else 7.5.sp
                         )
                         Text(
                             text = "💧 ${weather.humidityPercent}%",
                             color = Color(0xFFB0BEC5),
-                            fontSize = 7.5.sp
+                            fontSize = if (isLandscape) 6.5.sp else 7.5.sp
                         )
                         Text(
                             text = "🧭 ${String.format(Locale.US, "%.0f hpa", sensor.pressureHpa)}",
                             color = Color(0xFFB0BEC5),
-                            fontSize = 7.5.sp
+                            fontSize = if (isLandscape) 6.5.sp else 7.5.sp
                         )
                         Text(
                             text = "🧲 ${String.format(Locale.US, "%.2f µT", sensor.magneticFieldMicroTesla)}",
                             color = Color(0xFFB0BEC5),
-                            fontSize = 7.5.sp
+                            fontSize = if (isLandscape) 6.5.sp else 7.5.sp
                         )
                     }
                 }
@@ -349,6 +367,9 @@ fun ModernMinimalWatermarkCard(
     uiState: CameraUiState,
     config: StampConfig
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val cardMaxWidth = if (isLandscape) 336.dp else 380.dp
+
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
         else -> null
@@ -362,11 +383,12 @@ fun ModernMinimalWatermarkCard(
 
     Box(
         modifier = Modifier
+            .widthIn(max = cardMaxWidth)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xE60A0E16))
             .border(1.dp, Color(0x6000E5FF), RoundedCornerShape(12.dp))
-            .padding(10.dp)
+            .padding(if (isLandscape) 8.dp else 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (config.showMapSnapshot && uiState.mapSnapshot != null) {
@@ -374,28 +396,31 @@ fun ModernMinimalWatermarkCard(
                     bitmap = uiState.mapSnapshot.asImageBitmap(),
                     contentDescription = "Map Mini",
                     modifier = Modifier
-                        .size(54.dp)
+                        .size(if (isLandscape) 46.dp else 54.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .border(1.dp, CyanPrimary, RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 if (config.showCoordinates) {
                     Text(
                         text = coordString,
                         color = CyanPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = if (isLandscape) 10.sp else 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 if (config.showAddress && !address.isNullOrBlank()) {
                     Text(
                         text = address,
                         color = Color.White,
-                        fontSize = 10.sp,
-                        maxLines = 1
+                        fontSize = if (isLandscape) 9.sp else 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 val metaParts = buildList {
@@ -407,8 +432,9 @@ fun ModernMinimalWatermarkCard(
                     Text(
                         text = metaParts.joinToString(" • "),
                         color = Color(0xFFB0BEC5),
-                        fontSize = 9.sp,
-                        maxLines = 1
+                        fontSize = if (isLandscape) 8.sp else 9.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -422,6 +448,9 @@ fun SurveyorGridWatermarkCard(
     uiState: CameraUiState,
     config: StampConfig
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val cardMaxWidth = if (isLandscape) 336.dp else 400.dp
+
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
         else -> null
@@ -436,6 +465,7 @@ fun SurveyorGridWatermarkCard(
 
     Box(
         modifier = Modifier
+            .widthIn(max = cardMaxWidth)
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
             .background(Color(0xF2060A10))
@@ -446,11 +476,11 @@ fun SurveyorGridWatermarkCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("PROJ: $project", color = BrandYellow, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                Text("INSP: $inspector", color = Color.White, fontSize = 9.sp)
+                Text("PROJ: $project", color = BrandYellow, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("INSP: $inspector", color = Color.White, fontSize = 8.5.sp, maxLines = 1)
             }
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x55FFCC00)))
 
@@ -458,14 +488,14 @@ fun SurveyorGridWatermarkCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("GPS: ${if (config.showCoordinates) coordStr else "-"}", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                Text("GPS: ${if (config.showCoordinates) coordStr else "-"}", color = Color.White, fontSize = 8.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 Text(
                     text = "ACC: ${if (config.showAccuracy && loc != null) "±%.1fm".format(Locale.US, loc.accuracyMeters) else "-"}",
                     color = Color(0xFF00E676),
-                    fontSize = 9.sp
+                    fontSize = 8.5.sp
                 )
             }
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x55FFCC00)))
@@ -483,9 +513,10 @@ fun SurveyorGridWatermarkCard(
             Text(
                 text = "LOC: $locLine",
                 color = Color(0xFFD6E0EA),
-                fontSize = 8.5.sp,
+                fontSize = 8.sp,
                 maxLines = 1,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp)
             )
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x55FFCC00)))
 
@@ -493,15 +524,15 @@ fun SurveyorGridWatermarkCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                    .padding(horizontal = 8.dp, vertical = 2.5.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("TIME: ${if (config.showDateTime) dateText else "-"}", color = Color.LightGray, fontSize = 8.5.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                Text("TIME: ${if (config.showDateTime) dateText else "-"}", color = Color.LightGray, fontSize = 8.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (config.showWeather || config.showCompass || config.showSensors) {
                     Text(
                         text = "CLIMATE: ${uiState.weatherSnapshot.weatherEmoji} ${uiState.weatherSnapshot.temperatureCelsius.toInt()}°C • 🧭 ${uiState.sensorSnapshot.compassDegrees}°",
                         color = Color(0xFF81D4FA),
-                        fontSize = 8.5.sp
+                        fontSize = 8.sp
                     )
                 }
             }
@@ -515,6 +546,9 @@ fun FrostedGlassWatermarkCard(
     uiState: CameraUiState,
     config: StampConfig
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val cardMaxWidth = if (isLandscape) 336.dp else 380.dp
+
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
         else -> null
@@ -527,35 +561,38 @@ fun FrostedGlassWatermarkCard(
 
     Box(
         modifier = Modifier
+            .widthIn(max = cardMaxWidth)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xD90D1520))
             .border(1.2.dp, Color(0x9900E5FF), RoundedCornerShape(12.dp))
-            .padding(10.dp)
+            .padding(if (isLandscape) 8.dp else 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .width(3.5.dp)
-                    .height(48.dp)
+                    .height(if (isLandscape) 42.dp else 48.dp)
                     .background(CyanPrimary, RoundedCornerShape(2.dp))
             )
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Column {
                 if (config.showCustomTitle && config.customTitle.isNotBlank()) {
                     Text(
                         text = config.customTitle.uppercase(),
                         color = CyanPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = if (isLandscape) 10.sp else 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
                 if (config.showCoordinates) {
                     Text(
                         text = coordStr,
                         color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = if (isLandscape) 9.sp else 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                 }
                 val metaParts = buildList {
@@ -566,24 +603,27 @@ fun FrostedGlassWatermarkCard(
                     Text(
                         text = metaParts.joinToString(" • "),
                         color = Color(0xFFB0BEC5),
-                        fontSize = 8.5.sp,
-                        maxLines = 1
+                        fontSize = if (isLandscape) 8.sp else 8.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 if (config.showAddress && !uiState.detailedAddress?.fullStreetAddress.isNullOrBlank()) {
                     Text(
                         text = uiState.detailedAddress!!.fullStreetAddress,
                         color = Color(0xFFD6E0EA),
-                        fontSize = 8.5.sp,
-                        maxLines = 1
+                        fontSize = if (isLandscape) 8.sp else 8.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 if (config.notes.isNotBlank()) {
                     Text(
                         text = config.notes,
                         color = Color(0xFFB0BEC5),
-                        fontSize = 8.sp,
-                        maxLines = 1
+                        fontSize = 7.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -597,6 +637,9 @@ fun HighContrastDarkWatermarkCard(
     uiState: CameraUiState,
     config: StampConfig
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val cardMaxWidth = if (isLandscape) 336.dp else 380.dp
+
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
         else -> null
@@ -609,27 +652,30 @@ fun HighContrastDarkWatermarkCard(
 
     Box(
         modifier = Modifier
+            .widthIn(max = cardMaxWidth)
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFA040608))
             .border(1.dp, Color(0xFF263238), RoundedCornerShape(8.dp))
-            .padding(10.dp)
+            .padding(if (isLandscape) 8.dp else 10.dp)
     ) {
         Column {
             if (config.showCustomTitle && config.customTitle.isNotBlank()) {
                 Text(
                     text = config.customTitle.uppercase(),
                     color = BrandYellow,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = if (isLandscape) 10.sp else 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
             }
             if (config.showCoordinates) {
                 Text(
                     text = coordStr,
                     color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = if (isLandscape) 9.sp else 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
             }
             val metaParts = buildList {
@@ -645,24 +691,27 @@ fun HighContrastDarkWatermarkCard(
                 Text(
                     text = metaParts.joinToString("  •  "),
                     color = Color(0xFFCFD8DC),
-                    fontSize = 8.5.sp,
-                    maxLines = 1
+                    fontSize = if (isLandscape) 8.sp else 8.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (config.showAddress && !uiState.detailedAddress?.fullStreetAddress.isNullOrBlank()) {
                 Text(
                     text = uiState.detailedAddress!!.fullStreetAddress,
                     color = Color(0xFFB0BEC5),
-                    fontSize = 8.5.sp,
-                    maxLines = 1
+                    fontSize = if (isLandscape) 8.sp else 8.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (config.notes.isNotBlank()) {
                 Text(
                     text = config.notes,
                     color = Color(0xFFB0BEC5),
-                    fontSize = 8.sp,
-                    maxLines = 1
+                    fontSize = 7.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -675,6 +724,9 @@ fun CleanOutlineWatermarkCard(
     uiState: CameraUiState,
     config: StampConfig
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val cardMaxWidth = if (isLandscape) 336.dp else 380.dp
+
     val loc = when (val s = uiState.locationState) {
         is LocationState.Ready -> s.snapshot
         else -> null
@@ -685,21 +737,27 @@ fun CleanOutlineWatermarkCard(
     }
     val dateText = rememberLiveFormattedDate(config.dateTimePattern)
 
-    Column(modifier = Modifier.padding(8.dp)) {
+    Column(
+        modifier = Modifier
+            .widthIn(max = cardMaxWidth)
+            .padding(6.dp)
+    ) {
         if (config.showCustomTitle && config.customTitle.isNotBlank()) {
             Text(
                 text = config.customTitle.uppercase(),
                 color = BrandYellow,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = if (isLandscape) 10.sp else 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
         }
         if (config.showCoordinates) {
             Text(
                 text = coordStr,
                 color = Color.White,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = if (isLandscape) 9.sp else 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
         }
         val metaParts = buildList {
@@ -712,24 +770,27 @@ fun CleanOutlineWatermarkCard(
             Text(
                 text = metaParts.joinToString(" • "),
                 color = Color.White,
-                fontSize = 8.5.sp,
-                maxLines = 1
+                fontSize = if (isLandscape) 8.sp else 8.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         if (config.showAddress && !uiState.detailedAddress?.fullStreetAddress.isNullOrBlank()) {
             Text(
                 text = uiState.detailedAddress!!.fullStreetAddress,
                 color = Color.White,
-                fontSize = 8.5.sp,
-                maxLines = 1
+                fontSize = if (isLandscape) 8.sp else 8.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         if (config.notes.isNotBlank()) {
             Text(
                 text = config.notes,
-                color = Color.White,
-                fontSize = 8.sp,
-                maxLines = 1
+                color = Color(0xFFE0E0E0),
+                fontSize = 7.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

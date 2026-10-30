@@ -1,6 +1,9 @@
 package com.geostamp.camera.ui.camera
 
 import android.Manifest
+import android.content.res.Configuration
+import android.view.OrientationEventListener
+import android.view.Surface
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +31,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,6 +84,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -120,6 +125,8 @@ fun CameraScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val haptic = LocalHapticFeedback.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val uiState by viewModel.uiState.collectAsState()
     val stampConfig by viewModel.stampConfig.collectAsState()
@@ -129,6 +136,25 @@ fun CameraScreen(
     var currentZoom by remember { mutableFloatStateOf(1f) }
     var maxZoom by remember { mutableFloatStateOf(8f) }
     var focusPoint by remember { mutableStateOf<Offset?>(null) }
+
+    DisposableEffect(context) {
+        val orientationListener = object : OrientationEventListener(context) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation == ORIENTATION_UNKNOWN) return
+                val rotation = when (orientation) {
+                    in 45 until 135 -> Surface.ROTATION_270
+                    in 135 until 225 -> Surface.ROTATION_180
+                    in 225 until 315 -> Surface.ROTATION_90
+                    else -> Surface.ROTATION_0
+                }
+                imageCapture?.targetRotation = rotation
+            }
+        }
+        orientationListener.enable()
+        onDispose {
+            orientationListener.disable()
+        }
+    }
 
     var hasCameraPermission by remember { mutableStateOf(false) }
     var hasLocationPermission by remember { mutableStateOf(false) }
@@ -344,17 +370,21 @@ fun CameraScreen(
         // 5. Timer countdown overlay (e.g. 3... 2... 1...)
         TimerCountdownOverlay(secondsRemaining = uiState.countdownRemaining)
 
-        // 6. Vertical Exposure Slider on Right Side
+        // 6. Vertical Exposure Slider (Left side in Landscape so Right side is free for Shutter Dock; Right side in Portrait)
+        val sliderTrackHeight = if (isLandscape) 120f else 160f
         Box(
             modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 14.dp)
-                .height(200.dp)
+                .align(if (isLandscape) Alignment.CenterStart else Alignment.CenterEnd)
+                .padding(
+                    start = if (isLandscape) 8.dp else 0.dp,
+                    end = if (isLandscape) 0.dp else 14.dp
+                )
+                .height((sliderTrackHeight + 40f).dp)
                 .width(36.dp)
-                .pointerInput(Unit) {
+                .pointerInput(isLandscape) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        val delta = -dragAmount.y / 180f
+                        val delta = -dragAmount.y / (sliderTrackHeight + 20f)
                         val newProgress = (uiState.exposureProgress + delta).coerceIn(0f, 1f)
                         viewModel.setExposureProgress(newProgress, cameraControl)
                     }
@@ -364,20 +394,20 @@ fun CameraScreen(
             Box(
                 modifier = Modifier
                     .width(2.dp)
-                    .height(160.dp)
+                    .height(sliderTrackHeight.dp)
                     .background(Color(0x55FFFFFF))
             )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .width(2.5.dp)
-                    .height((160 * uiState.exposureProgress).dp)
+                    .height((sliderTrackHeight * uiState.exposureProgress).dp)
                     .background(BrandYellow)
             )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .offset(y = (-(160 * uiState.exposureProgress)).dp)
+                    .offset(y = (-(sliderTrackHeight * uiState.exposureProgress)).dp)
                     .size(26.dp)
                     .background(Color.Black, CircleShape)
                     .border(1.2.dp, BrandYellow, CircleShape),
@@ -396,7 +426,11 @@ fun CameraScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 36.dp, start = 8.dp, end = 8.dp),
+                .padding(
+                    top = if (isLandscape) 6.dp else 36.dp,
+                    start = if (isLandscape) 12.dp else 8.dp,
+                    end = if (isLandscape) 96.dp else 8.dp
+                ),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -410,7 +444,7 @@ fun CameraScreen(
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         viewModel.cycleAspectRatio()
                     }
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = if (isLandscape) 4.dp else 6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -435,7 +469,7 @@ fun CameraScreen(
                     },
                     contentDescription = "Flash",
                     tint = if (uiState.isTorchOn || uiState.flashMode != ImageCapture.FLASH_MODE_OFF) BrandYellow else Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -452,7 +486,7 @@ fun CameraScreen(
                     },
                     contentDescription = "Grid",
                     tint = if (uiState.gridMode > 0) BrandYellow else Color(0x99FFFFFF),
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -469,7 +503,7 @@ fun CameraScreen(
                     },
                     contentDescription = "Timer",
                     tint = if (uiState.timerSeconds > 0) BrandYellow else Color(0x99FFFFFF),
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -479,7 +513,7 @@ fun CameraScreen(
                     imageVector = Icons.AutoMirrored.Filled.NoteAdd,
                     contentDescription = "Custom Tag",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -493,7 +527,7 @@ fun CameraScreen(
                         is LocationState.Acquiring -> AccentAmber
                         else -> AccentRed
                     },
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -506,7 +540,7 @@ fun CameraScreen(
                     imageVector = Icons.Default.Cameraswitch,
                     contentDescription = "Switch Camera",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -516,21 +550,33 @@ fun CameraScreen(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
 
-        // 8. Live Watermark Overlay (Positioned dynamically according to stampConfig.position)
+        // 8. Live Watermark Overlay (Positioned dynamically according to stampConfig.position & orientation)
         val isTopWatermark = stampConfig.position == StampPosition.TOP_LEFT || stampConfig.position == StampPosition.TOP_RIGHT
-        val watermarkPaddingModifier = if (isTopWatermark) {
-            Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 84.dp)
+        val watermarkPaddingModifier = if (isLandscape) {
+            if (isTopWatermark) {
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 60.dp, start = 44.dp, end = 148.dp)
+            } else {
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 10.dp, start = 44.dp, end = 148.dp)
+            }
         } else {
-            Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 158.dp)
+            if (isTopWatermark) {
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 84.dp)
+            } else {
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 158.dp)
+            }
         }
 
         LiveWatermarkOverlay(
@@ -540,229 +586,437 @@ fun CameraScreen(
             modifier = watermarkPaddingModifier
         )
 
-        // 9. Zoom Pills (0.5x, 1x, 2x, 5x)
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 114.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val zoomLevels = listOf(1.0f, 2.0f, 5.0f)
-            zoomLevels.forEach { targetZoom ->
-                val isSelected = currentZoom in (targetZoom - 0.4f)..(targetZoom + 0.4f)
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(if (isSelected) BrandYellow else Color(0x9910141C))
-                        .border(1.dp, if (isSelected) BrandYellow else Color(0x33FFFFFF), CircleShape)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            currentZoom = targetZoom.coerceAtMost(maxZoom)
-                            viewModel.setZoomRatio(currentZoom, cameraControl)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "${targetZoom.toInt()}x",
-                        color = if (isSelected) Color.Black else Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
-
-        // 10. Mode Selector (PHOTO / VIDEO) with smooth animated pills
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 74.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // PHOTO Mode
-            val isPhoto = uiState.currentMode == CameraMode.PHOTO
-            Box(
+        if (isLandscape) {
+            // LANDSCAPE LAYOUT: Zoom + Mode column on right beside the Right Control Dock, and Camera Click Button on Right Side
+            Column(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (isPhoto) BrandYellow else Color.Transparent)
-                    .clickable {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.setMode(CameraMode.PHOTO)
-                    }
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "PHOTO",
-                    color = if (isPhoto) Color.Black else Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
-            }
-
-            // VIDEO Mode
-            val isVideo = uiState.currentMode == CameraMode.VIDEO
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (isVideo) BrandYellow else Color.Transparent)
-                    .clickable {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.setMode(CameraMode.VIDEO)
-                    }
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (uiState.isVideoRecording) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(AccentRed)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
-                    Text(
-                        text = if (uiState.isVideoRecording) "REC %02d:%02d".format(uiState.recordingSeconds / 60, uiState.recordingSeconds % 60) else "VIDEO",
-                        color = if (isVideo) Color.Black else Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
-
-        // 11. Bottom Controls Bar (Preview, Location, Shutter, Folder, Templates)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .background(Color(0xF0080C12))
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 1. Preview thumbnail
-                BottomBarItem(label = "Preview", onClick = onNavigateToGallery) {
+                val zoomLevels = listOf(5.0f, 2.0f, 1.0f)
+                zoomLevels.forEach { targetZoom ->
+                    val isSelected = currentZoom in (targetZoom - 0.4f)..(targetZoom + 0.4f)
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(32.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1E2836))
-                            .border(1.5.dp, Color(0xFF37474F), CircleShape),
+                            .background(if (isSelected) BrandYellow else Color(0x9910141C))
+                            .border(1.dp, if (isSelected) BrandYellow else Color(0x33FFFFFF), CircleShape)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                currentZoom = targetZoom.coerceAtMost(maxZoom)
+                                viewModel.setZoomRatio(currentZoom, cameraControl)
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (uiState.lastPhoto != null) {
-                            AsyncImage(
-                                model = uiState.lastPhoto!!.uri,
-                                contentDescription = "Preview",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
+                        Text(
+                            text = "${targetZoom.toInt()}x",
+                            color = if (isSelected) Color.Black else Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // PHOTO / VIDEO toggle in Landscape
+                val isPhoto = uiState.currentMode == CameraMode.PHOTO
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isPhoto) BrandYellow else Color(0x9910141C))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setMode(CameraMode.PHOTO)
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "PHOTO",
+                        color = if (isPhoto) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp
+                    )
+                }
+
+                val isVideo = uiState.currentMode == CameraMode.VIDEO
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isVideo) BrandYellow else Color(0x9910141C))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setMode(CameraMode.VIDEO)
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (uiState.isVideoRecording) "REC" else "VIDEO",
+                        color = if (isVideo) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            // Right-Side Dock in Landscape (Camera Click Button in Center of Right Side)
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(88.dp)
+                    .align(Alignment.CenterEnd)
+                    .background(Color(0xF0080C12))
+                    .padding(vertical = 10.dp, horizontal = 6.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 1. Watermark Templates Chooser
+                    BottomBarItem(label = "Templates", onClick = { showTemplateSheet = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x991E2836)),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
-                                imageVector = Icons.Default.PhotoLibrary,
-                                contentDescription = "Gallery",
-                                tint = Color.LightGray,
+                                imageVector = Icons.Default.GridView,
+                                contentDescription = "Templates",
+                                tint = BrandYellow,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    // 2. Folder / Project Organizer
+                    BottomBarItem(label = "Folder", onClick = { showFolderDialog = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x991E2836)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = "Project Folder",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    // 3. Shutter / Record Button (Right Side Center)
+                    Box(
+                        modifier = Modifier
+                            .size(66.dp)
+                            .border(3.5.dp, if (uiState.currentMode == CameraMode.VIDEO) AccentRed else Color.White, CircleShape)
+                            .padding(5.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    uiState.isCapturing || uiState.isSaving -> Color.DarkGray
+                                    uiState.currentMode == CameraMode.VIDEO -> AccentRed
+                                    else -> Color.White
+                                }
+                            )
+                            .clickable(enabled = !uiState.isCapturing && !uiState.isSaving && hasCameraPermission) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (uiState.currentMode == CameraMode.VIDEO) {
+                                    viewModel.toggleVideoRecording()
+                                } else {
+                                    imageCapture?.let { viewModel.triggerCapture(context, it) }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (uiState.isSaving) {
+                            CircularProgressIndicator(
+                                color = BrandYellow,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+
+                    // 4. GPS Location status button
+                    BottomBarItem(label = "Location", onClick = { showLocationDetailsDialog = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x991E2836)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Location",
+                                tint = when (uiState.locationState) {
+                                    is LocationState.Ready -> AccentGreen
+                                    is LocationState.Acquiring -> AccentAmber
+                                    else -> AccentRed
+                                },
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                     }
-                }
 
-                // 2. GPS Location status button
-                BottomBarItem(label = "Location", onClick = { showLocationDetailsDialog = true }) {
+                    // 5. Preview thumbnail
+                    BottomBarItem(label = "Preview", onClick = onNavigateToGallery) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E2836))
+                                .border(1.5.dp, Color(0xFF37474F), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (uiState.lastPhoto != null) {
+                                AsyncImage(
+                                    model = uiState.lastPhoto!!.uri,
+                                    contentDescription = "Preview",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoLibrary,
+                                    contentDescription = "Gallery",
+                                    tint = Color.LightGray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // PORTRAIT LAYOUT: Zoom Pills, Mode Selector, and Bottom Controls Bar
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 114.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val zoomLevels = listOf(1.0f, 2.0f, 5.0f)
+                zoomLevels.forEach { targetZoom ->
+                    val isSelected = currentZoom in (targetZoom - 0.4f)..(targetZoom + 0.4f)
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(34.dp)
                             .clip(CircleShape)
-                            .background(Color(0x991E2836)),
+                            .background(if (isSelected) BrandYellow else Color(0x9910141C))
+                            .border(1.dp, if (isSelected) BrandYellow else Color(0x33FFFFFF), CircleShape)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                currentZoom = targetZoom.coerceAtMost(maxZoom)
+                                viewModel.setZoomRatio(currentZoom, cameraControl)
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "Location",
-                            tint = when (uiState.locationState) {
-                                is LocationState.Ready -> AccentGreen
-                                is LocationState.Acquiring -> AccentAmber
-                                else -> AccentRed
-                            },
-                            modifier = Modifier.size(26.dp)
+                        Text(
+                            text = "${targetZoom.toInt()}x",
+                            color = if (isSelected) Color.Black else Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
                         )
                     }
                 }
+            }
 
-                // 3. Shutter / Record Button
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 74.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val isPhoto = uiState.currentMode == CameraMode.PHOTO
                 Box(
                     modifier = Modifier
-                        .size(76.dp)
-                        .border(3.5.dp, if (uiState.currentMode == CameraMode.VIDEO) AccentRed else Color.White, CircleShape)
-                        .padding(5.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when {
-                                uiState.isCapturing || uiState.isSaving -> Color.DarkGray
-                                uiState.currentMode == CameraMode.VIDEO -> AccentRed
-                                else -> Color.White
-                            }
-                        )
-                        .clickable(enabled = !uiState.isCapturing && !uiState.isSaving && hasCameraPermission) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (uiState.currentMode == CameraMode.VIDEO) {
-                                viewModel.toggleVideoRecording()
-                            } else {
-                                imageCapture?.let { viewModel.triggerCapture(context, it) }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (isPhoto) BrandYellow else Color.Transparent)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setMode(CameraMode.PHOTO)
+                        }
+                        .padding(horizontal = 14.dp, vertical = 4.dp)
                 ) {
-                    if (uiState.isSaving) {
-                        CircularProgressIndicator(
-                            color = BrandYellow,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(34.dp)
+                    Text(
+                        text = "PHOTO",
+                        color = if (isPhoto) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+
+                val isVideo = uiState.currentMode == CameraMode.VIDEO
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (isVideo) BrandYellow else Color.Transparent)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setMode(CameraMode.VIDEO)
+                        }
+                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (uiState.isVideoRecording) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(AccentRed)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = if (uiState.isVideoRecording) "REC %02d:%02d".format(uiState.recordingSeconds / 60, uiState.recordingSeconds % 60) else "VIDEO",
+                            color = if (isVideo) Color.Black else Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
                         )
                     }
                 }
+            }
 
-                // 4. Folder / Project Organizer
-                BottomBarItem(label = "Folder", onClick = { showFolderDialog = true }) {
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x991E2836)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = "Project Folder",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(Color(0xF0080C12))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 1. Preview thumbnail
+                    BottomBarItem(label = "Preview", onClick = onNavigateToGallery) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E2836))
+                                .border(1.5.dp, Color(0xFF37474F), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (uiState.lastPhoto != null) {
+                                AsyncImage(
+                                    model = uiState.lastPhoto!!.uri,
+                                    contentDescription = "Preview",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoLibrary,
+                                    contentDescription = "Gallery",
+                                    tint = Color.LightGray,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
                     }
-                }
 
-                // 5. Watermark Templates Chooser
-                BottomBarItem(label = "Templates", onClick = { showTemplateSheet = true }) {
+                    // 2. GPS Location status button
+                    BottomBarItem(label = "Location", onClick = { showLocationDetailsDialog = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x991E2836)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Location",
+                                tint = when (uiState.locationState) {
+                                    is LocationState.Ready -> AccentGreen
+                                    is LocationState.Acquiring -> AccentAmber
+                                    else -> AccentRed
+                                },
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+
+                    // 3. Shutter / Record Button
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(76.dp)
+                            .border(3.5.dp, if (uiState.currentMode == CameraMode.VIDEO) AccentRed else Color.White, CircleShape)
+                            .padding(5.dp)
                             .clip(CircleShape)
-                            .background(Color(0x991E2836)),
+                            .background(
+                                when {
+                                    uiState.isCapturing || uiState.isSaving -> Color.DarkGray
+                                    uiState.currentMode == CameraMode.VIDEO -> AccentRed
+                                    else -> Color.White
+                                }
+                            )
+                            .clickable(enabled = !uiState.isCapturing && !uiState.isSaving && hasCameraPermission) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (uiState.currentMode == CameraMode.VIDEO) {
+                                    viewModel.toggleVideoRecording()
+                                } else {
+                                    imageCapture?.let { viewModel.triggerCapture(context, it) }
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.GridView,
-                            contentDescription = "Templates",
-                            tint = BrandYellow,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        if (uiState.isSaving) {
+                            CircularProgressIndicator(
+                                color = BrandYellow,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+                    }
+
+                    // 4. Folder / Project Organizer
+                    BottomBarItem(label = "Folder", onClick = { showFolderDialog = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x991E2836)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = "Project Folder",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    // 5. Watermark Templates Chooser
+                    BottomBarItem(label = "Templates", onClick = { showTemplateSheet = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x991E2836)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GridView,
+                                contentDescription = "Templates",
+                                tint = BrandYellow,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             }

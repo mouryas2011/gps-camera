@@ -53,23 +53,32 @@ fun AspectFramingMask(
     aspectRatio: AspectRatioOption,
     modifier: Modifier = Modifier
 ) {
+    if (aspectRatio == AspectRatioOption.RATIO_4_3) return
+
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val w = maxWidth
         val h = maxHeight
         val isPortrait = h >= w
 
-        val targetHeight = if (isPortrait) {
-            w * (aspectRatio.ratioX.toFloat() / aspectRatio.ratioY.toFloat())
+        if (isPortrait) {
+            val targetHeight = w * (aspectRatio.ratioX.toFloat() / aspectRatio.ratioY.toFloat())
+            val barH = (h - targetHeight) / 2f
+            if (barH > 8.dp) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxWidth().height(barH).background(Color(0xBF000000)))
+                    Spacer(modifier = Modifier.weight(1f))
+                    Box(modifier = Modifier.fillMaxWidth().height(barH).background(Color(0xBF000000)))
+                }
+            }
         } else {
-            w * (aspectRatio.ratioY.toFloat() / aspectRatio.ratioX.toFloat())
-        }
-
-        val barH = (h - targetHeight) / 2f
-        if (barH > 8.dp) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.fillMaxWidth().height(barH).background(Color(0xBF000000)))
-                Spacer(modifier = Modifier.weight(1f))
-                Box(modifier = Modifier.fillMaxWidth().height(barH).background(Color(0xBF000000)))
+            val targetWidth = h * (aspectRatio.ratioX.toFloat() / aspectRatio.ratioY.toFloat())
+            val barW = (w - targetWidth) / 2f
+            if (barW > 8.dp) {
+                androidx.compose.foundation.layout.Row(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxHeight().width(barW).background(Color(0xBF000000)))
+                    Spacer(modifier = Modifier.weight(1f))
+                    Box(modifier = Modifier.fillMaxHeight().width(barW).background(Color(0xBF000000)))
+                }
             }
         }
     }

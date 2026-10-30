@@ -327,9 +327,9 @@ object ImageProcessor {
         val cardInnerPadding = 14f * scale
         val cornerRadius = 12f * scale
 
-        val cardWidth = width - (padding * 2)
+        val cardWidth = stampCardWidth(width, height, padding)
         val hasMap = config.showMapSnapshot && mapBitmap != null && !mapBitmap.isRecycled
-        val mapBoxSize = if (hasMap) 220f * scale else 0f
+        val mapBoxSize = if (hasMap) 185f * scale else 0f
         val textSectionWidth = if (hasMap) {
             cardWidth - mapBoxSize - (cardInnerPadding * 3)
         } else {
@@ -443,7 +443,11 @@ object ImageProcessor {
         val cardContentHeight = max(mapBoxSize, textHeightAccumulator)
         val cardHeight = cardContentHeight + (cardInnerPadding * 2)
 
-        val cardLeft = padding
+        val cardLeft = if (config.position == StampPosition.TOP_RIGHT || config.position == StampPosition.BOTTOM_RIGHT) {
+            width - padding - cardWidth
+        } else {
+            padding
+        }
         val cardTop = if (config.position == StampPosition.TOP_LEFT || config.position == StampPosition.TOP_RIGHT) {
             padding
         } else {
@@ -613,17 +617,22 @@ object ImageProcessor {
 
         val padding = 24f * scale
         val innerPad = 14f * scale
-        val cardWidth = width - (padding * 2)
+        val cardWidth = stampCardWidth(width, height, padding)
         val hasMap = config.showMapSnapshot && mapBitmap != null && !mapBitmap.isRecycled
-        val mapSize = if (hasMap) 130f * scale else 0f
+        val mapSize = if (hasMap) 120f * scale else 0f
 
         val cardHeight = max(mapSize, 108f * scale) + (innerPad * 2)
+        val cardLeft = if (config.position == StampPosition.TOP_RIGHT || config.position == StampPosition.BOTTOM_RIGHT) {
+            width - padding - cardWidth
+        } else {
+            padding
+        }
         val cardTop = if (config.position == StampPosition.TOP_LEFT || config.position == StampPosition.TOP_RIGHT) {
             padding
         } else {
             height - padding - cardHeight
         }
-        val cardRect = RectF(padding, cardTop, padding + cardWidth, cardTop + cardHeight)
+        val cardRect = RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight)
 
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(215, 10, 14, 20)
@@ -639,7 +648,7 @@ object ImageProcessor {
 
         // Map on left if enabled
         if (hasMap) {
-            val mapRect = RectF(padding + innerPad, cardTop + innerPad, padding + innerPad + mapSize, cardTop + innerPad + mapSize)
+            val mapRect = RectF(cardLeft + innerPad, cardTop + innerPad, cardLeft + innerPad + mapSize, cardTop + innerPad + mapSize)
             canvas.drawBitmap(mapBitmap!!, null, mapRect, null)
             val circleBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#00E5FF")
@@ -649,7 +658,7 @@ object ImageProcessor {
             canvas.drawRect(mapRect, circleBorder)
         }
 
-        val textLeft = if (hasMap) padding + innerPad + mapSize + (14f * scale) else padding + innerPad
+        val textLeft = if (hasMap) cardLeft + innerPad + mapSize + (14f * scale) else cardLeft + innerPad
         val maxW = if (hasMap) cardWidth - mapSize - (innerPad * 3) else cardWidth - (innerPad * 2)
         var curY = cardTop + innerPad + (6f * scale)
 
@@ -712,18 +721,23 @@ object ImageProcessor {
         val scale = max(1.0f, minDim / 1080f)
 
         val padding = 20f * scale
-        val cardWidth = width - (padding * 2)
+        val cardWidth = stampCardWidth(width, height, padding)
         val rowHeight = 38f * scale
         val totalRows = 4
         val cardHeight = rowHeight * totalRows
 
+        val cardLeft = if (config.position == StampPosition.TOP_RIGHT || config.position == StampPosition.BOTTOM_RIGHT) {
+            width - padding - cardWidth
+        } else {
+            padding
+        }
         val cardTop = if (config.position == StampPosition.TOP_LEFT || config.position == StampPosition.TOP_RIGHT) {
             padding
         } else {
             height - padding - cardHeight
         }
 
-        val cardRect = RectF(padding, cardTop, padding + cardWidth, cardTop + cardHeight)
+        val cardRect = RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight)
 
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(240, 6, 10, 16)
@@ -741,11 +755,11 @@ object ImageProcessor {
         // Draw horizontal grid lines
         for (i in 1 until totalRows) {
             val y = cardTop + (i * rowHeight)
-            canvas.drawLine(padding, y, padding + cardWidth, y, gridLinePaint)
+            canvas.drawLine(cardLeft, y, cardLeft + cardWidth, y, gridLinePaint)
         }
 
         // Draw vertical mid line for Row 1, Row 2, Row 4
-        val midX = padding + (cardWidth / 2f)
+        val midX = cardLeft + (cardWidth / 2f)
         canvas.drawLine(midX, cardTop, midX, cardTop + (rowHeight * 2), gridLinePaint)
         canvas.drawLine(midX, cardTop + (rowHeight * 3), midX, cardTop + cardHeight, gridLinePaint)
 
@@ -772,10 +786,10 @@ object ImageProcessor {
             if (config.companyName.isNotBlank()) append(" (${config.companyName})")
         }
         val projLabelW = labelPaint.measureText("PROJECT: ")
-        canvas.drawText("PROJECT: ", padding + cellPad, cardTop + textBaselineOffset, labelPaint)
+        canvas.drawText("PROJECT: ", cardLeft + cellPad, cardTop + textBaselineOffset, labelPaint)
         canvas.drawText(
             ellipsizeText(projTitle, valPaint, halfCellWidth - projLabelW),
-            padding + cellPad + projLabelW,
+            cardLeft + cellPad + projLabelW,
             cardTop + textBaselineOffset,
             valPaint
         )
@@ -793,10 +807,10 @@ object ImageProcessor {
         // Row 2: Left = GPS Coords, Right = Accuracy & Alt
         val r2Y = cardTop + rowHeight
         val gpsLabelW = labelPaint.measureText("GPS FIX: ")
-        canvas.drawText("GPS FIX: ", padding + cellPad, r2Y + textBaselineOffset, labelPaint)
+        canvas.drawText("GPS FIX: ", cardLeft + cellPad, r2Y + textBaselineOffset, labelPaint)
         canvas.drawText(
             ellipsizeText(coordStr ?: "N/A", valPaint, halfCellWidth - gpsLabelW),
-            padding + cellPad + gpsLabelW,
+            cardLeft + cellPad + gpsLabelW,
             r2Y + textBaselineOffset,
             valPaint
         )
@@ -833,10 +847,10 @@ object ImageProcessor {
             }
         }.ifBlank { coordStr ?: "On-Device Stamped Location" }
         val locLabelW = labelPaint.measureText("LOCATION: ")
-        canvas.drawText("LOCATION: ", padding + cellPad, r3Y + textBaselineOffset, labelPaint)
+        canvas.drawText("LOCATION: ", cardLeft + cellPad, r3Y + textBaselineOffset, labelPaint)
         canvas.drawText(
             ellipsizeText(addrStr, valPaint, fullCellWidth - locLabelW),
-            padding + cellPad + locLabelW,
+            cardLeft + cellPad + locLabelW,
             r3Y + textBaselineOffset,
             valPaint
         )
@@ -844,10 +858,10 @@ object ImageProcessor {
         // Row 4: Left = Date & Time, Right = Environmental
         val r4Y = cardTop + (rowHeight * 3)
         val timeLabelW = labelPaint.measureText("TIMESTAMP: ")
-        canvas.drawText("TIMESTAMP: ", padding + cellPad, r4Y + textBaselineOffset, labelPaint)
+        canvas.drawText("TIMESTAMP: ", cardLeft + cellPad, r4Y + textBaselineOffset, labelPaint)
         canvas.drawText(
             ellipsizeText(timeStr ?: "-", valPaint, halfCellWidth - timeLabelW),
-            padding + cellPad + timeLabelW,
+            cardLeft + cellPad + timeLabelW,
             r4Y + textBaselineOffset,
             valPaint
         )
@@ -888,7 +902,7 @@ object ImageProcessor {
         val scale = max(1.0f, minDim / 1080f)
         val padding = 24f * scale
         val innerPad = 16f * scale
-        val cardWidth = width - (padding * 2)
+        val cardWidth = stampCardWidth(width, height, padding)
         val textMaxWidth = cardWidth - (innerPad * 2) - (16f * scale)
 
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -944,13 +958,18 @@ object ImageProcessor {
             totalH += (p.fontMetrics.descent - p.fontMetrics.ascent) + lineSpacing
         }
         val cardHeight = totalH + (innerPad * 2)
+        val cardLeft = if (config.position == StampPosition.TOP_RIGHT || config.position == StampPosition.BOTTOM_RIGHT) {
+            width - padding - cardWidth
+        } else {
+            padding
+        }
         val cardTop = if (config.position == StampPosition.TOP_LEFT || config.position == StampPosition.TOP_RIGHT) {
             padding
         } else {
             height - padding - cardHeight
         }
 
-        val rect = RectF(padding, cardTop, padding + cardWidth, cardTop + cardHeight)
+        val rect = RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight)
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(205, 12, 17, 24)
             style = Paint.Style.FILL
@@ -964,7 +983,7 @@ object ImageProcessor {
         canvas.drawRoundRect(rect, 14f * scale, 14f * scale, borderPaint)
 
         // Cyan left accent vertical bar
-        val barRect = RectF(padding + (8f * scale), cardTop + (8f * scale), padding + (12f * scale), cardTop + cardHeight - (8f * scale))
+        val barRect = RectF(cardLeft + (8f * scale), cardTop + (8f * scale), cardLeft + (12f * scale), cardTop + cardHeight - (8f * scale))
         val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#00E5FF")
             style = Paint.Style.FILL
@@ -972,7 +991,7 @@ object ImageProcessor {
         canvas.drawRoundRect(barRect, 2f * scale, 2f * scale, barPaint)
 
         var curY = cardTop + innerPad
-        val textLeft = padding + innerPad + (10f * scale)
+        val textLeft = cardLeft + innerPad + (10f * scale)
         for ((text, paint) in lines) {
             canvas.drawText(text, textLeft, curY - paint.fontMetrics.ascent, paint)
             curY += (paint.fontMetrics.descent - paint.fontMetrics.ascent) + lineSpacing
@@ -995,7 +1014,7 @@ object ImageProcessor {
         val scale = max(1.0f, minDim / 1080f)
         val padding = 20f * scale
         val innerPad = 14f * scale
-        val cardWidth = width - (padding * 2)
+        val cardWidth = stampCardWidth(width, height, padding)
         val textMaxWidth = cardWidth - (innerPad * 2)
 
         val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1050,13 +1069,18 @@ object ImageProcessor {
             totalH += (p.fontMetrics.descent - p.fontMetrics.ascent) + lineSpacing
         }
         val cardHeight = totalH + (innerPad * 2)
+        val cardLeft = if (config.position == StampPosition.TOP_RIGHT || config.position == StampPosition.BOTTOM_RIGHT) {
+            width - padding - cardWidth
+        } else {
+            padding
+        }
         val cardTop = if (config.position == StampPosition.TOP_LEFT || config.position == StampPosition.TOP_RIGHT) {
             padding
         } else {
             height - padding - cardHeight
         }
 
-        val rect = RectF(padding, cardTop, padding + cardWidth, cardTop + cardHeight)
+        val rect = RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight)
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(248, 4, 6, 8)
             style = Paint.Style.FILL
@@ -1064,7 +1088,7 @@ object ImageProcessor {
         canvas.drawRoundRect(rect, 8f * scale, 8f * scale, bgPaint)
 
         var curY = cardTop + innerPad
-        val textLeft = padding + innerPad
+        val textLeft = cardLeft + innerPad
         for ((text, paint) in lines) {
             canvas.drawText(text, textLeft, curY - paint.fontMetrics.ascent, paint)
             curY += (paint.fontMetrics.descent - paint.fontMetrics.ascent) + lineSpacing
@@ -1132,6 +1156,10 @@ object ImageProcessor {
             canvas.drawText(line, x, curY, fillPaint)
             curY += lineHeight + lineSpacing
         }
+    }
+
+    private fun stampCardWidth(width: Int, height: Int, padding: Float): Float {
+        return if (width > height) width * 0.42f else width - padding * 2
     }
 
     private fun ellipsizeText(text: String, paint: Paint, maxWidth: Float): String {
