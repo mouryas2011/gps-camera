@@ -13,7 +13,7 @@ import kotlin.coroutines.resume
 data class DetailedAddress(
     val shortHeader: String,
     val fullStreetAddress: String,
-    val countryFlag: String = "🇮🇳"
+    val countryFlag: String = "📍"
 )
 
 object GeocoderHelper {
@@ -27,7 +27,7 @@ object GeocoderHelper {
     ): DetailedAddress? = withContext(Dispatchers.IO) {
         if (!Geocoder.isPresent()) return@withContext null
 
-        val cacheKey = String.format(Locale.US, "%.3f,%.3f", latitude, longitude)
+        val cacheKey = String.format(Locale.US, "%.4f,%.4f", latitude, longitude)
         synchronized(detailedCache) {
             detailedCache[cacheKey]?.let { return@withContext it }
         }
@@ -42,10 +42,14 @@ object GeocoderHelper {
                         1,
                         object : Geocoder.GeocodeListener {
                             override fun onGeocode(addresses: MutableList<Address>) {
-                                continuation.resume(addresses.firstOrNull())
+                                if (continuation.isActive) {
+                                    continuation.resume(addresses.firstOrNull())
+                                }
                             }
                             override fun onError(errorMessage: String?) {
-                                continuation.resume(null)
+                                if (continuation.isActive) {
+                                    continuation.resume(null)
+                                }
                             }
                         }
                     )
@@ -78,22 +82,32 @@ object GeocoderHelper {
     }
 
     private fun formatDetailed(address: Address): DetailedAddress {
-        val flag = getCountryFlag(address.countryCode ?: "IN")
+        val flag = getCountryFlag(address.countryCode)
 
-        // 1. Short Header: e.g. "Korba, Chhattisgarh, India 🇮🇳"
-        val city = address.locality ?: address.subAdminArea ?: address.featureName ?: "Korba"
-        val state = address.adminArea ?: "Chhattisgarh"
-        val country = address.countryName ?: "India"
-        val header = "$city, $state, $country $flag"
+        val city = address.locality ?: address.subAdminArea ?: address.subLocality
+        val state = address.adminArea
+        val country = address.countryName
 
-        // 2. Full Street Address: e.g. "223, Rampur, Korba, Chhattisgarh 495677, India"
+        val headerParts = listOfNotNull(
+            city?.takeIf { it.isNotBlank() },
+            state?.takeIf { it.isNotBlank() },
+            country?.takeIf { it.isNotBlank() }
+        ).distinct()
+
+        val headerBase = if (headerParts.isNotEmpty()) {
+            headerParts.joinToString(", ")
+        } else {
+            address.featureName?.takeIf { it.isNotBlank() } ?: "GPS Location"
+        }
+        val header = if (flag.isNotBlank()) "$headerBase $flag" else headerBase
+
         val parts = mutableListOf<String>()
 
         val street = when {
-            address.subThoroughfare != null && address.thoroughfare != null ->
+            !address.subThoroughfare.isNullOrBlank() && !address.thoroughfare.isNullOrBlank() ->
                 "${address.subThoroughfare}, ${address.thoroughfare}"
-            address.thoroughfare != null -> address.thoroughfare
-            address.featureName != null && address.featureName != address.locality -> address.featureName
+            !address.thoroughfare.isNullOrBlank() -> address.thoroughfare
+            !address.featureName.isNullOrBlank() && address.featureName != city -> address.featureName
             else -> null
         }
         if (!street.isNullOrBlank()) parts.add(street)
@@ -103,19 +117,26 @@ object GeocoderHelper {
 
         if (!city.isNullOrBlank() && !parts.contains(city)) parts.add(city)
 
-        val stateAndPin = if (!address.postalCode.isNullOrBlank()) {
-            "$state ${address.postalCode}"
-        } else {
-            state
+        if (!state.isNullOrBlank()) {
+            val stateAndPin = if (!address.postalCode.isNullOrBlank()) {
+                "$state ${address.postalCode}"
+            } else {
+                state
+            }
+            if (!parts.contains(stateAndPin)) parts.add(stateAndPin)
+        } else if (!address.postalCode.isNullOrBlank()) {
+            parts.add(address.postalCode)
         }
-        if (!parts.contains(stateAndPin)) parts.add(stateAndPin)
 
-        if (!parts.contains(country)) parts.add(country)
+        if (!country.isNullOrBlank() && !parts.contains(country)) parts.add(country)
 
         val fullAddress = if (parts.isNotEmpty()) {
             parts.joinToString(", ")
         } else {
-            (0..address.maxAddressLineIndex).mapNotNull { address.getAddressLine(it) }.joinToString(", ")
+            (0..address.maxAddressLineIndex)
+                .mapNotNull { address.getAddressLine(it)?.takeIf { line -> line.isNotBlank() } }
+                .joinToString(", ")
+                .ifBlank { headerBase }
         }
 
         return DetailedAddress(
@@ -125,16 +146,17 @@ object GeocoderHelper {
         )
     }
 
-    private fun getCountryFlag(countryCode: String): String {
+    private fun getCountryFlag(countryCode: String?): String {
+        if (countryCode.isNullOrBlank()) return "📍"
         return try {
-            val upper = countryCode.uppercase(Locale.US)
-            if (upper.length == 2) {
+            val upper = countryCode.trim().uppercase(Locale.US)
+            if (upper.length == 2 && upper[0] in 'A'..'Z' && upper[1] in 'A'..'Z') {
                 val firstChar = Character.toChars(0x1F1E6 + (upper[0] - 'A'))
                 val secondChar = Character.toChars(0x1F1E6 + (upper[1] - 'A'))
                 String(firstChar) + String(secondChar)
-            } else "🇮🇳"
+            } else "📍"
         } catch (_: Exception) {
-            "🇮🇳"
+            "📍"
         }
     }
 }

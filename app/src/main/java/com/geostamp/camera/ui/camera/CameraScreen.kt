@@ -152,6 +152,8 @@ fun CameraScreen(
     }
 
     LaunchedEffect(Unit) {
+        viewModel.refreshRecentPhoto()
+
         val camGranted = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.CAMERA
@@ -195,6 +197,61 @@ fun CameraScreen(
     ) {
         // 1. Camera Viewfinder
         if (hasCameraPermission) {
+            val previewView = remember {
+                PreviewView(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                }
+            }
+
+            LaunchedEffect(hasCameraPermission, uiState.lensFacing) {
+                currentZoom = 1f
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+                cameraProviderFuture.addListener({
+                    try {
+                        val cameraProvider = cameraProviderFuture.get()
+
+                        val preview = Preview.Builder().build().also {
+                            it.setSurfaceProvider(previewView.surfaceProvider)
+                        }
+
+                        val capture = ImageCapture.Builder()
+                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                            .setFlashMode(uiState.flashMode)
+                            .build()
+                        imageCapture = capture
+
+                        val requestedSelector = CameraSelector.Builder()
+                            .requireLensFacing(uiState.lensFacing)
+                            .build()
+
+                        val selector = if (cameraProvider.hasCamera(requestedSelector)) {
+                            requestedSelector
+                        } else {
+                            CameraSelector.DEFAULT_BACK_CAMERA
+                        }
+
+                        cameraProvider.unbindAll()
+                        val cam = cameraProvider.bindToLifecycle(
+                            lifecycleOwner,
+                            selector,
+                            preview,
+                            capture
+                        )
+                        cameraControl = cam.cameraControl
+
+                        cam.cameraInfo.zoomState.observe(lifecycleOwner) { zoomState ->
+                            maxZoom = zoomState.maxZoomRatio.coerceAtMost(8f)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }, ContextCompat.getMainExecutor(context))
+            }
+
             AndroidView(
                 modifier = Modifier
                     .fillMaxSize()
@@ -217,53 +274,7 @@ fun CameraScreen(
                             cameraControl?.startFocusAndMetering(action)
                         }
                     },
-                factory = { ctx ->
-                    val previewView = PreviewView(ctx).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        scaleType = PreviewView.ScaleType.FILL_CENTER
-                    }
-
-                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                    cameraProviderFuture.addListener({
-                        val cameraProvider = cameraProviderFuture.get()
-
-                        val preview = Preview.Builder().build().also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
-                        }
-
-                        val capture = ImageCapture.Builder()
-                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                            .setFlashMode(uiState.flashMode)
-                            .build()
-                        imageCapture = capture
-
-                        val cameraSelector = CameraSelector.Builder()
-                            .requireLensFacing(uiState.lensFacing)
-                            .build()
-
-                        try {
-                            cameraProvider.unbindAll()
-                            val cam = cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                cameraSelector,
-                                preview,
-                                capture
-                            )
-                            cameraControl = cam.cameraControl
-
-                            cam.cameraInfo.zoomState.observe(lifecycleOwner) { zoomState ->
-                                maxZoom = zoomState.maxZoomRatio.coerceAtMost(8f)
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }, ContextCompat.getMainExecutor(ctx))
-
-                    previewView
-                },
+                factory = { previewView },
                 update = {
                     imageCapture?.flashMode = uiState.flashMode
                 }

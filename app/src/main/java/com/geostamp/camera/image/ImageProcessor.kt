@@ -100,10 +100,15 @@ object ImageProcessor {
             SimpleDateFormat("EEEE, dd/MM/yyyy hh:mm a 'GMT' Z", Locale.getDefault())
         }
         val formattedTime = dateFormat.format(now)
+        val displayTime = if (config.showDateTime) formattedTime else null
 
         val formattedCoords = if (location != null && config.showCoordinates) {
             StampConfig.formatCoordinates(location.latitude, location.longitude, config.coordinateFormat)
         } else null
+
+        val effectiveAddress = if (config.showAddress) detailedAddress else null
+        val effectivePlusCode = if (config.showPlusCode) plusCode else null
+        val effectiveMap = if (config.showMapSnapshot) mapBitmap else null
 
         // 7. Draw stamp according to selected template style
         when (config.style) {
@@ -114,12 +119,12 @@ object ImageProcessor {
                     height = mutableBitmap.height,
                     config = config,
                     location = location,
-                    detailedAddress = detailedAddress,
-                    plusCode = plusCode,
+                    detailedAddress = effectiveAddress,
+                    plusCode = effectivePlusCode,
                     sensorSnapshot = sensorSnapshot,
                     weatherSnapshot = weatherSnapshot,
-                    mapBitmap = mapBitmap,
-                    timeStr = formattedTime,
+                    mapBitmap = effectiveMap,
+                    timeStr = displayTime,
                     coordStr = formattedCoords
                 )
             }
@@ -130,11 +135,11 @@ object ImageProcessor {
                     height = mutableBitmap.height,
                     config = config,
                     location = location,
-                    detailedAddress = detailedAddress,
+                    detailedAddress = effectiveAddress,
                     sensorSnapshot = sensorSnapshot,
                     weatherSnapshot = weatherSnapshot,
-                    mapBitmap = mapBitmap,
-                    timeStr = formattedTime,
+                    mapBitmap = effectiveMap,
+                    timeStr = displayTime,
                     coordStr = formattedCoords
                 )
             }
@@ -145,11 +150,11 @@ object ImageProcessor {
                     height = mutableBitmap.height,
                     config = config,
                     location = location,
-                    detailedAddress = detailedAddress,
-                    plusCode = plusCode,
+                    detailedAddress = effectiveAddress,
+                    plusCode = effectivePlusCode,
                     sensorSnapshot = sensorSnapshot,
                     weatherSnapshot = weatherSnapshot,
-                    timeStr = formattedTime,
+                    timeStr = displayTime,
                     coordStr = formattedCoords
                 )
             }
@@ -160,10 +165,10 @@ object ImageProcessor {
                     height = mutableBitmap.height,
                     config = config,
                     location = location,
-                    detailedAddress = detailedAddress,
-                    plusCode = plusCode,
+                    detailedAddress = effectiveAddress,
+                    plusCode = effectivePlusCode,
                     weatherSnapshot = weatherSnapshot,
-                    timeStr = formattedTime,
+                    timeStr = displayTime,
                     coordStr = formattedCoords
                 )
             }
@@ -174,9 +179,9 @@ object ImageProcessor {
                     height = mutableBitmap.height,
                     config = config,
                     location = location,
-                    detailedAddress = detailedAddress,
+                    detailedAddress = effectiveAddress,
                     sensorSnapshot = sensorSnapshot,
-                    timeStr = formattedTime,
+                    timeStr = displayTime,
                     coordStr = formattedCoords
                 )
             }
@@ -187,12 +192,17 @@ object ImageProcessor {
                     height = mutableBitmap.height,
                     config = config,
                     location = location,
-                    detailedAddress = detailedAddress,
-                    timeStr = formattedTime,
+                    detailedAddress = effectiveAddress,
+                    sensorSnapshot = sensorSnapshot,
+                    weatherSnapshot = weatherSnapshot,
+                    timeStr = displayTime,
                     coordStr = formattedCoords
                 )
             }
         }
+
+        val finalWidth = mutableBitmap.width
+        val finalHeight = mutableBitmap.height
 
         // 8. Compress stamped bitmap to JPEG
         val stream = ByteArrayOutputStream()
@@ -204,13 +214,14 @@ object ImageProcessor {
         val finalBytes = injectExifMetadata(
             jpegBytes = stampedBytes,
             location = location,
+            address = detailedAddress?.fullStreetAddress,
             date = now
         )
 
         return ProcessedPhotoResult(
             jpegBytes = finalBytes,
-            width = canvas.width,
-            height = canvas.height,
+            width = finalWidth,
+            height = finalHeight,
             formattedTimestamp = formattedTime,
             formattedCoordinates = formattedCoords,
             address = detailedAddress?.fullStreetAddress
@@ -277,6 +288,14 @@ object ImageProcessor {
             ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
             ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
             ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.postScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(270f)
+                matrix.postScale(-1f, 1f)
+            }
             else -> {}
         }
         return if (!matrix.isIdentity) {
@@ -298,7 +317,7 @@ object ImageProcessor {
         sensorSnapshot: SensorSnapshot,
         weatherSnapshot: WeatherSnapshot,
         mapBitmap: Bitmap?,
-        timeStr: String,
+        timeStr: String?,
         coordStr: String?
     ) {
         val minDim = min(width, height).toFloat()
@@ -309,8 +328,13 @@ object ImageProcessor {
         val cornerRadius = 12f * scale
 
         val cardWidth = width - (padding * 2)
-        val mapBoxSize = 220f * scale
-        val textSectionWidth = cardWidth - mapBoxSize - (cardInnerPadding * 3)
+        val hasMap = config.showMapSnapshot && mapBitmap != null && !mapBitmap.isRecycled
+        val mapBoxSize = if (hasMap) 220f * scale else 0f
+        val textSectionWidth = if (hasMap) {
+            cardWidth - mapBoxSize - (cardInnerPadding * 3)
+        } else {
+            cardWidth - (cardInnerPadding * 2)
+        }
 
         val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
@@ -349,9 +373,48 @@ object ImageProcessor {
         }
 
         val lineSpacing = 6f * scale
-        val headerText = detailedAddress?.shortHeader ?: "Korba, Chhattisgarh, India 🇮🇳"
-        val streetText = detailedAddress?.fullStreetAddress ?: "223, Rampur, Korba, Chhattisgarh 495677, India"
-        val wrappedAddress = wrapText(streetText, addressPaint, textSectionWidth)
+        val logoBoxW = 125f * scale
+        val headerMaxW = textSectionWidth - logoBoxW - (8f * scale)
+        val rawHeader = when {
+            config.showAddress && !detailedAddress?.shortHeader.isNullOrBlank() -> detailedAddress!!.shortHeader
+            config.showCustomTitle && config.customTitle.isNotBlank() -> config.customTitle
+            coordStr != null -> coordStr
+            else -> "GPS Map Camera"
+        }
+        val headerText = ellipsizeText(rawHeader, headerPaint, headerMaxW)
+
+        val wrappedAddress = if (config.showAddress && !detailedAddress?.fullStreetAddress.isNullOrBlank()) {
+            wrapText(detailedAddress!!.fullStreetAddress, addressPaint, textSectionWidth)
+        } else {
+            emptyList()
+        }
+
+        val accAltParts = mutableListOf<String>()
+        if (config.showAccuracy && location != null) {
+            accAltParts.add(String.format(Locale.US, "Accuracy: ±%.1fm", location.accuracyMeters))
+        }
+        if (config.showAltitude && location?.altitudeMeters != null) {
+            accAltParts.add(String.format(Locale.US, "Alt: %.1fm", location.altitudeMeters))
+        }
+        if (config.showPlusCode && !plusCode.isNullOrBlank()) {
+            accAltParts.add("Plus Code : $plusCode")
+        }
+        val plusAndAccLine = accAltParts.joinToString("  •  ")
+
+        val extraTagParts = mutableListOf<String>()
+        if (config.showCustomTitle && config.customTitle.isNotBlank() && config.customTitle != "GPS Map Camera" && rawHeader != config.customTitle) {
+            extraTagParts.add(config.customTitle)
+        }
+        if (config.companyName.isNotBlank()) {
+            extraTagParts.add(config.companyName)
+        }
+        if (config.notes.isNotBlank()) {
+            extraTagParts.add(config.notes)
+        }
+        val extraTagLine = extraTagParts.joinToString(" • ")
+
+        val hasTimeOrWeather = (config.showDateTime && !timeStr.isNullOrBlank()) || config.showWeather
+        val hasPersonOrCompass = true
 
         var textHeightAccumulator = 0f
         textHeightAccumulator += (headerPaint.fontMetrics.descent - headerPaint.fontMetrics.ascent) + lineSpacing
@@ -361,12 +424,21 @@ object ImageProcessor {
         if (coordStr != null) {
             textHeightAccumulator += (coordPaint.fontMetrics.descent - coordPaint.fontMetrics.ascent) + lineSpacing
         }
-        if (!plusCode.isNullOrBlank()) {
+        if (plusAndAccLine.isNotBlank()) {
             textHeightAccumulator += (metaPaint.fontMetrics.descent - metaPaint.fontMetrics.ascent) + lineSpacing
         }
-        textHeightAccumulator += (timePaint.fontMetrics.descent - timePaint.fontMetrics.ascent) + lineSpacing
-        textHeightAccumulator += (metaPaint.fontMetrics.descent - metaPaint.fontMetrics.ascent) + lineSpacing
-        textHeightAccumulator += (sensorPaint.fontMetrics.descent - sensorPaint.fontMetrics.ascent) + lineSpacing
+        if (hasTimeOrWeather) {
+            textHeightAccumulator += (timePaint.fontMetrics.descent - timePaint.fontMetrics.ascent) + lineSpacing
+        }
+        if (extraTagLine.isNotBlank()) {
+            textHeightAccumulator += (metaPaint.fontMetrics.descent - metaPaint.fontMetrics.ascent) + lineSpacing
+        }
+        if (hasPersonOrCompass) {
+            textHeightAccumulator += (metaPaint.fontMetrics.descent - metaPaint.fontMetrics.ascent) + lineSpacing
+        }
+        if (config.showSensors) {
+            textHeightAccumulator += (sensorPaint.fontMetrics.descent - sensorPaint.fontMetrics.ascent) + lineSpacing
+        }
 
         val cardContentHeight = max(mapBoxSize, textHeightAccumulator)
         val cardHeight = cardContentHeight + (cardInnerPadding * 2)
@@ -392,13 +464,12 @@ object ImageProcessor {
         canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, bgPaint)
         canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, borderPaint)
 
-        // Draw Map square on left
+        // Draw Map square on left if enabled
         val mapLeft = cardLeft + cardInnerPadding
-        val mapTop = cardTop + (cardHeight - mapBoxSize) / 2f
-        val mapRect = RectF(mapLeft, mapTop, mapLeft + mapBoxSize, mapTop + mapBoxSize)
-
-        if (mapBitmap != null && !mapBitmap.isRecycled) {
-            canvas.drawBitmap(mapBitmap, null, mapRect, null)
+        if (hasMap) {
+            val mapTop = cardTop + (cardHeight - mapBoxSize) / 2f
+            val mapRect = RectF(mapLeft, mapTop, mapLeft + mapBoxSize, mapTop + mapBoxSize)
+            canvas.drawBitmap(mapBitmap!!, null, mapRect, null)
             val mapBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.argb(80, 255, 255, 255)
                 style = Paint.Style.STROKE
@@ -408,7 +479,8 @@ object ImageProcessor {
         }
 
         // Draw text details on right side
-        val textLeft = mapLeft + mapBoxSize + cardInnerPadding
+        val textLeft = if (hasMap) mapLeft + mapBoxSize + cardInnerPadding else cardLeft + cardInnerPadding
+        val rightEdge = cardLeft + cardWidth - cardInnerPadding
         var currentY = cardTop + cardInnerPadding
 
         val headerFm = headerPaint.fontMetrics
@@ -427,63 +499,76 @@ object ImageProcessor {
             currentY += (coordFm.descent - coordFm.ascent) + lineSpacing
         }
 
-        if (!plusCode.isNullOrBlank()) {
+        if (plusAndAccLine.isNotBlank()) {
             val metaFm = metaPaint.fontMetrics
-            canvas.drawText("Plus Code : $plusCode", textLeft, currentY - metaFm.ascent, metaPaint)
+            canvas.drawText(ellipsizeText(plusAndAccLine, metaPaint, textSectionWidth), textLeft, currentY - metaFm.ascent, metaPaint)
             currentY += (metaFm.descent - metaFm.ascent) + lineSpacing
         }
 
-        val timeFm = timePaint.fontMetrics
-        canvas.drawText(timeStr, textLeft, currentY - timeFm.ascent, timePaint)
-
-        val weatherText = String.format(
-            Locale.US,
-            "%s %.2f° C",
-            weatherSnapshot.weatherEmoji,
-            weatherSnapshot.temperatureCelsius
-        )
-        val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#FFD54F")
-            textSize = 14f * scale
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        if (hasTimeOrWeather) {
+            val timeFm = timePaint.fontMetrics
+            if (config.showDateTime && !timeStr.isNullOrBlank()) {
+                canvas.drawText(timeStr, textLeft, currentY - timeFm.ascent, timePaint)
+            }
+            if (config.showWeather) {
+                val weatherText = String.format(
+                    Locale.US,
+                    "%s %.2f° C",
+                    weatherSnapshot.weatherEmoji,
+                    weatherSnapshot.temperatureCelsius
+                )
+                val tempPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.parseColor("#FFD54F")
+                    textSize = 14f * scale
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                }
+                val weatherWidth = tempPaint.measureText(weatherText)
+                canvas.drawText(weatherText, rightEdge - weatherWidth, currentY - timeFm.ascent, tempPaint)
+            }
+            currentY += (timeFm.descent - timeFm.ascent) + lineSpacing
         }
-        val weatherWidth = tempPaint.measureText(weatherText)
-        val rightEdge = cardLeft + cardWidth - cardInnerPadding
-        canvas.drawText(weatherText, rightEdge - weatherWidth, currentY - timeFm.ascent, tempPaint)
-        currentY += (timeFm.descent - timeFm.ascent) + lineSpacing
+
+        if (extraTagLine.isNotBlank()) {
+            val metaFm = metaPaint.fontMetrics
+            canvas.drawText(ellipsizeText(extraTagLine, metaPaint, textSectionWidth), textLeft, currentY - metaFm.ascent, metaPaint)
+            currentY += (metaFm.descent - metaFm.ascent) + lineSpacing
+        }
 
         val personNameText = "Person Name : ${if (config.personName.isNotBlank()) config.personName else "-"}"
         val metaFm = metaPaint.fontMetrics
         canvas.drawText(personNameText, textLeft, currentY - metaFm.ascent, metaPaint)
 
-        val compassText = String.format(
-            Locale.US,
-            "🧭 %d° %s",
-            sensorSnapshot.compassDegrees,
-            sensorSnapshot.compassDirection
-        )
-        val compassPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#81D4FA")
-            textSize = 14f * scale
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        if (config.showCompass || config.showSensors) {
+            val compassText = String.format(
+                Locale.US,
+                "🧭 %d° %s",
+                sensorSnapshot.compassDegrees,
+                sensorSnapshot.compassDirection
+            )
+            val compassPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#81D4FA")
+                textSize = 14f * scale
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val compassWidth = compassPaint.measureText(compassText)
+            canvas.drawText(compassText, rightEdge - compassWidth, currentY - metaFm.ascent, compassPaint)
         }
-        val compassWidth = compassPaint.measureText(compassText)
-        canvas.drawText(compassText, rightEdge - compassWidth, currentY - metaFm.ascent, compassPaint)
         currentY += (metaFm.descent - metaFm.ascent) + lineSpacing
 
-        val sensorText = String.format(
-            Locale.US,
-            "🍃 %.2f km/h   💧 %d%%   🧭 %.0f hpa   🧲 %.2f µT",
-            weatherSnapshot.windSpeedKmh,
-            weatherSnapshot.humidityPercent,
-            sensorSnapshot.pressureHpa,
-            sensorSnapshot.magneticFieldMicroTesla
-        )
-        val sensorFm = sensorPaint.fontMetrics
-        canvas.drawText(sensorText, textLeft, currentY - sensorFm.ascent, sensorPaint)
+        if (config.showSensors) {
+            val sensorText = String.format(
+                Locale.US,
+                "🍃 %.2f km/h   💧 %d%%   🧭 %.0f hpa   🧲 %.2f µT",
+                weatherSnapshot.windSpeedKmh,
+                weatherSnapshot.humidityPercent,
+                sensorSnapshot.pressureHpa,
+                sensorSnapshot.magneticFieldMicroTesla
+            )
+            val sensorFm = sensorPaint.fontMetrics
+            canvas.drawText(ellipsizeText(sensorText, sensorPaint, textSectionWidth), textLeft, currentY - sensorFm.ascent, sensorPaint)
+        }
 
         // Logo badge
-        val logoBoxW = 125f * scale
         val logoBoxH = 26f * scale
         val logoLeft = cardLeft + cardWidth - logoBoxW - cardInnerPadding
         val logoTop = cardTop + 10f * scale
@@ -520,7 +605,7 @@ object ImageProcessor {
         sensorSnapshot: SensorSnapshot,
         weatherSnapshot: WeatherSnapshot,
         mapBitmap: Bitmap?,
-        timeStr: String,
+        timeStr: String?,
         coordStr: String?
     ) {
         val minDim = min(width, height).toFloat()
@@ -529,9 +614,10 @@ object ImageProcessor {
         val padding = 24f * scale
         val innerPad = 14f * scale
         val cardWidth = width - (padding * 2)
-        val mapSize = 130f * scale
+        val hasMap = config.showMapSnapshot && mapBitmap != null && !mapBitmap.isRecycled
+        val mapSize = if (hasMap) 130f * scale else 0f
 
-        val cardHeight = mapSize + (innerPad * 2)
+        val cardHeight = max(mapSize, 108f * scale) + (innerPad * 2)
         val cardTop = if (config.position == StampPosition.TOP_LEFT || config.position == StampPosition.TOP_RIGHT) {
             padding
         } else {
@@ -551,10 +637,10 @@ object ImageProcessor {
         canvas.drawRoundRect(cardRect, 18f * scale, 18f * scale, bgPaint)
         canvas.drawRoundRect(cardRect, 18f * scale, 18f * scale, borderPaint)
 
-        // Map Circle on left
-        if (mapBitmap != null && !mapBitmap.isRecycled) {
+        // Map on left if enabled
+        if (hasMap) {
             val mapRect = RectF(padding + innerPad, cardTop + innerPad, padding + innerPad + mapSize, cardTop + innerPad + mapSize)
-            canvas.drawBitmap(mapBitmap, null, mapRect, null)
+            canvas.drawBitmap(mapBitmap!!, null, mapRect, null)
             val circleBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#00E5FF")
                 style = Paint.Style.STROKE
@@ -563,7 +649,8 @@ object ImageProcessor {
             canvas.drawRect(mapRect, circleBorder)
         }
 
-        val textLeft = padding + innerPad + mapSize + (14f * scale)
+        val textLeft = if (hasMap) padding + innerPad + mapSize + (14f * scale) else padding + innerPad
+        val maxW = if (hasMap) cardWidth - mapSize - (innerPad * 3) else cardWidth - (innerPad * 2)
         var curY = cardTop + innerPad + (6f * scale)
 
         // Coords
@@ -573,22 +660,22 @@ object ImageProcessor {
                 textSize = 17f * scale
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
-            canvas.drawText(coordStr, textLeft, curY - p.fontMetrics.ascent, p)
+            canvas.drawText(ellipsizeText(coordStr, p, maxW), textLeft, curY - p.fontMetrics.ascent, p)
             curY += (p.fontMetrics.descent - p.fontMetrics.ascent) + (4f * scale)
         }
 
         // Address
-        val addressText = detailedAddress?.fullStreetAddress ?: "GPS Location"
-        val addrPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = 14f * scale
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        }
-        val maxW = cardWidth - mapSize - (innerPad * 3)
-        val wrapped = wrapText(addressText, addrPaint, maxW)
-        if (wrapped.isNotEmpty()) {
-            canvas.drawText(wrapped.first(), textLeft, curY - addrPaint.fontMetrics.ascent, addrPaint)
-            curY += (addrPaint.fontMetrics.descent - addrPaint.fontMetrics.ascent) + (4f * scale)
+        if (config.showAddress && !detailedAddress?.fullStreetAddress.isNullOrBlank()) {
+            val addrPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 14f * scale
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            }
+            val wrapped = wrapText(detailedAddress!!.fullStreetAddress, addrPaint, maxW)
+            for (line in wrapped.take(2)) {
+                canvas.drawText(line, textLeft, curY - addrPaint.fontMetrics.ascent, addrPaint)
+                curY += (addrPaint.fontMetrics.descent - addrPaint.fontMetrics.ascent) + (4f * scale)
+            }
         }
 
         // Time + Climate Pill
@@ -596,8 +683,15 @@ object ImageProcessor {
             color = Color.parseColor("#B0BEC5")
             textSize = 13f * scale
         }
-        val climate = "${weatherSnapshot.weatherEmoji} ${weatherSnapshot.temperatureCelsius.toInt()}°C • 🧭 ${sensorSnapshot.compassDegrees}° ${sensorSnapshot.compassDirection}"
-        canvas.drawText("$timeStr   $climate", textLeft, curY - subPaint.fontMetrics.ascent, subPaint)
+        val metaParts = mutableListOf<String>()
+        if (!timeStr.isNullOrBlank()) metaParts.add(timeStr)
+        if (config.showWeather) metaParts.add("${weatherSnapshot.weatherEmoji} ${weatherSnapshot.temperatureCelsius.toInt()}°C")
+        if (config.showCompass || config.showSensors) metaParts.add("🧭 ${sensorSnapshot.compassDegrees}° ${sensorSnapshot.compassDirection}")
+        if (config.notes.isNotBlank()) metaParts.add(config.notes)
+        val combinedMeta = metaParts.joinToString(" • ")
+        if (combinedMeta.isNotBlank()) {
+            canvas.drawText(ellipsizeText(combinedMeta, subPaint, maxW), textLeft, curY - subPaint.fontMetrics.ascent, subPaint)
+        }
     }
 
     // 3. SURVEYOR GRID
@@ -611,7 +705,7 @@ object ImageProcessor {
         plusCode: String?,
         sensorSnapshot: SensorSnapshot,
         weatherSnapshot: WeatherSnapshot,
-        timeStr: String,
+        timeStr: String?,
         coordStr: String?
     ) {
         val minDim = min(width, height).toFloat()
@@ -656,6 +750,9 @@ object ImageProcessor {
         canvas.drawLine(midX, cardTop + (rowHeight * 3), midX, cardTop + cardHeight, gridLinePaint)
 
         val cellPad = 8f * scale
+        val halfCellWidth = (cardWidth / 2f) - (cellPad * 2)
+        val fullCellWidth = cardWidth - (cellPad * 2)
+
         val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#FFCC00")
             textSize = 10.5f * scale
@@ -667,38 +764,111 @@ object ImageProcessor {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
 
-        // Row 1: Left = Project, Right = Inspector
-        val projTitle = if (config.customTitle.isNotBlank()) config.customTitle else "GPS Map Camera"
-        canvas.drawText("PROJECT: ", padding + cellPad, cardTop + (16f * scale), labelPaint)
-        canvas.drawText(projTitle, padding + cellPad + (60f * scale), cardTop + (16f * scale), valPaint)
+        val textBaselineOffset = 24f * scale
 
-        val person = if (config.personName.isNotBlank()) config.personName else "Surveyor"
-        canvas.drawText("INSPECTOR: ", midX + cellPad, cardTop + (16f * scale), labelPaint)
-        canvas.drawText(person, midX + cellPad + (72f * scale), cardTop + (16f * scale), valPaint)
+        // Row 1: Left = Project, Right = Inspector
+        val projTitle = buildString {
+            append(if (config.customTitle.isNotBlank()) config.customTitle else "GPS Map Camera")
+            if (config.companyName.isNotBlank()) append(" (${config.companyName})")
+        }
+        val projLabelW = labelPaint.measureText("PROJECT: ")
+        canvas.drawText("PROJECT: ", padding + cellPad, cardTop + textBaselineOffset, labelPaint)
+        canvas.drawText(
+            ellipsizeText(projTitle, valPaint, halfCellWidth - projLabelW),
+            padding + cellPad + projLabelW,
+            cardTop + textBaselineOffset,
+            valPaint
+        )
+
+        val person = if (config.personName.isNotBlank() && config.personName != "-") config.personName else "Surveyor"
+        val inspLabelW = labelPaint.measureText("INSPECTOR: ")
+        canvas.drawText("INSPECTOR: ", midX + cellPad, cardTop + textBaselineOffset, labelPaint)
+        canvas.drawText(
+            ellipsizeText(person, valPaint, halfCellWidth - inspLabelW),
+            midX + cellPad + inspLabelW,
+            cardTop + textBaselineOffset,
+            valPaint
+        )
 
         // Row 2: Left = GPS Coords, Right = Accuracy & Alt
         val r2Y = cardTop + rowHeight
-        canvas.drawText("GPS FIX: ", padding + cellPad, r2Y + (16f * scale), labelPaint)
-        canvas.drawText(coordStr ?: "Acquiring...", padding + cellPad + (56f * scale), r2Y + (16f * scale), valPaint)
+        val gpsLabelW = labelPaint.measureText("GPS FIX: ")
+        canvas.drawText("GPS FIX: ", padding + cellPad, r2Y + textBaselineOffset, labelPaint)
+        canvas.drawText(
+            ellipsizeText(coordStr ?: "N/A", valPaint, halfCellWidth - gpsLabelW),
+            padding + cellPad + gpsLabelW,
+            r2Y + textBaselineOffset,
+            valPaint
+        )
 
-        val accAlt = "±${String.format(Locale.US, "%.1fm", location?.accuracyMeters ?: 4f)} • Alt: ${String.format(Locale.US, "%.1fm", location?.altitudeMeters ?: 0.0)}"
-        canvas.drawText("PRECISION: ", midX + cellPad, r2Y + (16f * scale), labelPaint)
-        canvas.drawText(accAlt, midX + cellPad + (72f * scale), r2Y + (16f * scale), valPaint)
+        val accAltParts = mutableListOf<String>()
+        if (config.showAccuracy && location != null) {
+            accAltParts.add(String.format(Locale.US, "±%.1fm", location.accuracyMeters))
+        }
+        if (config.showAltitude && location?.altitudeMeters != null) {
+            accAltParts.add(String.format(Locale.US, "Alt: %.1fm", location.altitudeMeters))
+        }
+        if (config.showPlusCode && !plusCode.isNullOrBlank()) {
+            accAltParts.add(plusCode)
+        }
+        val accAlt = accAltParts.joinToString(" • ").ifBlank { "Verified" }
+        val precLabelW = labelPaint.measureText("PRECISION: ")
+        canvas.drawText("PRECISION: ", midX + cellPad, r2Y + textBaselineOffset, labelPaint)
+        canvas.drawText(
+            ellipsizeText(accAlt, valPaint, halfCellWidth - precLabelW),
+            midX + cellPad + precLabelW,
+            r2Y + textBaselineOffset,
+            valPaint
+        )
 
-        // Row 3: Full Address
+        // Row 3: Full Address / Notes
         val r3Y = cardTop + (rowHeight * 2)
-        val addrStr = detailedAddress?.fullStreetAddress ?: "Location Address"
-        canvas.drawText("LOCATION: ", padding + cellPad, r3Y + (16f * scale), labelPaint)
-        canvas.drawText(addrStr, padding + cellPad + (68f * scale), r3Y + (16f * scale), valPaint)
+        val addrStr = buildString {
+            if (config.showAddress && !detailedAddress?.fullStreetAddress.isNullOrBlank()) {
+                append(detailedAddress!!.fullStreetAddress)
+            }
+            if (config.notes.isNotBlank()) {
+                if (isNotEmpty()) append(" | Note: ")
+                append(config.notes)
+            }
+        }.ifBlank { coordStr ?: "On-Device Stamped Location" }
+        val locLabelW = labelPaint.measureText("LOCATION: ")
+        canvas.drawText("LOCATION: ", padding + cellPad, r3Y + textBaselineOffset, labelPaint)
+        canvas.drawText(
+            ellipsizeText(addrStr, valPaint, fullCellWidth - locLabelW),
+            padding + cellPad + locLabelW,
+            r3Y + textBaselineOffset,
+            valPaint
+        )
 
         // Row 4: Left = Date & Time, Right = Environmental
         val r4Y = cardTop + (rowHeight * 3)
-        canvas.drawText("TIMESTAMP: ", padding + cellPad, r4Y + (16f * scale), labelPaint)
-        canvas.drawText(timeStr, padding + cellPad + (74f * scale), r4Y + (16f * scale), valPaint)
+        val timeLabelW = labelPaint.measureText("TIMESTAMP: ")
+        canvas.drawText("TIMESTAMP: ", padding + cellPad, r4Y + textBaselineOffset, labelPaint)
+        canvas.drawText(
+            ellipsizeText(timeStr ?: "-", valPaint, halfCellWidth - timeLabelW),
+            padding + cellPad + timeLabelW,
+            r4Y + textBaselineOffset,
+            valPaint
+        )
 
-        val env = "${weatherSnapshot.weatherEmoji} ${weatherSnapshot.temperatureCelsius.toInt()}°C • 🧭 ${sensorSnapshot.compassDegrees}° • 💧 ${weatherSnapshot.humidityPercent}%"
-        canvas.drawText("CLIMATE: ", midX + cellPad, r4Y + (16f * scale), labelPaint)
-        canvas.drawText(env, midX + cellPad + (58f * scale), r4Y + (16f * scale), valPaint)
+        val envParts = mutableListOf<String>()
+        if (config.showWeather) {
+            envParts.add("${weatherSnapshot.weatherEmoji} ${weatherSnapshot.temperatureCelsius.toInt()}°C")
+            envParts.add("💧 ${weatherSnapshot.humidityPercent}%")
+        }
+        if (config.showCompass || config.showSensors) {
+            envParts.add("🧭 ${sensorSnapshot.compassDegrees}° ${sensorSnapshot.compassDirection}")
+        }
+        val env = envParts.joinToString(" • ").ifBlank { "-" }
+        val climLabelW = labelPaint.measureText("CLIMATE: ")
+        canvas.drawText("CLIMATE: ", midX + cellPad, r4Y + textBaselineOffset, labelPaint)
+        canvas.drawText(
+            ellipsizeText(env, valPaint, halfCellWidth - climLabelW),
+            midX + cellPad + climLabelW,
+            r4Y + textBaselineOffset,
+            valPaint
+        )
     }
 
     // 4. FROSTED GLASS
@@ -711,7 +881,7 @@ object ImageProcessor {
         detailedAddress: DetailedAddress?,
         plusCode: String?,
         weatherSnapshot: WeatherSnapshot,
-        timeStr: String,
+        timeStr: String?,
         coordStr: String?
     ) {
         val minDim = min(width, height).toFloat()
@@ -719,6 +889,7 @@ object ImageProcessor {
         val padding = 24f * scale
         val innerPad = 16f * scale
         val cardWidth = width - (padding * 2)
+        val textMaxWidth = cardWidth - (innerPad * 2) - (16f * scale)
 
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#00E5FF")
@@ -736,10 +907,36 @@ object ImageProcessor {
         }
 
         val lines = mutableListOf<Pair<String, Paint>>()
-        if (config.showCustomTitle) lines.add((config.customTitle.ifBlank { "GPS MAP CAMERA" }).uppercase() to titlePaint)
-        if (coordStr != null) lines.add(coordStr to primaryPaint)
-        lines.add(timeStr to subPaint)
-        detailedAddress?.fullStreetAddress?.let { lines.add(it to subPaint) }
+        if (config.showCustomTitle && config.customTitle.isNotBlank()) {
+            lines.add(ellipsizeText(config.customTitle.uppercase(), titlePaint, textMaxWidth) to titlePaint)
+        }
+        if (coordStr != null) {
+            lines.add(ellipsizeText(coordStr, primaryPaint, textMaxWidth) to primaryPaint)
+        }
+        val metaParts = mutableListOf<String>()
+        if (!timeStr.isNullOrBlank()) metaParts.add(timeStr)
+        if (config.showWeather) metaParts.add("${weatherSnapshot.weatherEmoji} ${weatherSnapshot.temperatureCelsius.toInt()}°C")
+        if (config.showAccuracy && location != null) metaParts.add(String.format(Locale.US, "±%.1fm", location.accuracyMeters))
+        if (config.showAltitude && location?.altitudeMeters != null) metaParts.add(String.format(Locale.US, "Alt: %.1fm", location.altitudeMeters))
+        if (config.showPlusCode && !plusCode.isNullOrBlank()) metaParts.add("Plus: $plusCode")
+        if (metaParts.isNotEmpty()) {
+            for (wrapped in wrapText(metaParts.joinToString(" • "), subPaint, textMaxWidth)) {
+                lines.add(wrapped to subPaint)
+            }
+        }
+        if (config.showAddress && !detailedAddress?.fullStreetAddress.isNullOrBlank()) {
+            for (wrapped in wrapText(detailedAddress!!.fullStreetAddress, subPaint, textMaxWidth)) {
+                lines.add(wrapped to subPaint)
+            }
+        }
+        if (config.notes.isNotBlank()) {
+            for (wrapped in wrapText(config.notes, subPaint, textMaxWidth)) {
+                lines.add(wrapped to subPaint)
+            }
+        }
+        if (lines.isEmpty()) {
+            lines.add("GPS MAP CAMERA" to titlePaint)
+        }
 
         var totalH = 0f
         val lineSpacing = 6f * scale
@@ -791,7 +988,7 @@ object ImageProcessor {
         location: LocationSnapshot?,
         detailedAddress: DetailedAddress?,
         sensorSnapshot: SensorSnapshot,
-        timeStr: String,
+        timeStr: String?,
         coordStr: String?
     ) {
         val minDim = min(width, height).toFloat()
@@ -799,6 +996,7 @@ object ImageProcessor {
         val padding = 20f * scale
         val innerPad = 14f * scale
         val cardWidth = width - (padding * 2)
+        val textMaxWidth = cardWidth - (innerPad * 2)
 
         val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#FFCC00")
@@ -816,10 +1014,35 @@ object ImageProcessor {
         }
 
         val lines = mutableListOf<Pair<String, Paint>>()
-        lines.add((if (config.customTitle.isNotBlank()) config.customTitle else "GPS MAP CAMERA").uppercase() to headerPaint)
-        if (coordStr != null) lines.add(coordStr to textPaint)
-        lines.add(timeStr to subPaint)
-        detailedAddress?.fullStreetAddress?.let { lines.add(it to subPaint) }
+        if (config.showCustomTitle && config.customTitle.isNotBlank()) {
+            lines.add(ellipsizeText(config.customTitle.uppercase(), headerPaint, textMaxWidth) to headerPaint)
+        }
+        if (coordStr != null) {
+            lines.add(ellipsizeText(coordStr, textPaint, textMaxWidth) to textPaint)
+        }
+        val metaParts = mutableListOf<String>()
+        if (!timeStr.isNullOrBlank()) metaParts.add(timeStr)
+        if (config.showAccuracy && location != null) metaParts.add(String.format(Locale.US, "±%.1fm", location.accuracyMeters))
+        if (config.showAltitude && location?.altitudeMeters != null) metaParts.add(String.format(Locale.US, "Alt: %.1fm", location.altitudeMeters))
+        if (config.showCompass || config.showSensors) metaParts.add("🧭 ${sensorSnapshot.compassDegrees}° ${sensorSnapshot.compassDirection}")
+        if (metaParts.isNotEmpty()) {
+            for (wrapped in wrapText(metaParts.joinToString("  •  "), subPaint, textMaxWidth)) {
+                lines.add(wrapped to subPaint)
+            }
+        }
+        if (config.showAddress && !detailedAddress?.fullStreetAddress.isNullOrBlank()) {
+            for (wrapped in wrapText(detailedAddress!!.fullStreetAddress, subPaint, textMaxWidth)) {
+                lines.add(wrapped to subPaint)
+            }
+        }
+        if (config.notes.isNotBlank()) {
+            for (wrapped in wrapText(config.notes, subPaint, textMaxWidth)) {
+                lines.add(wrapped to subPaint)
+            }
+        }
+        if (lines.isEmpty()) {
+            lines.add("GPS MAP CAMERA" to headerPaint)
+        }
 
         var totalH = 0f
         val lineSpacing = 6f * scale
@@ -856,12 +1079,16 @@ object ImageProcessor {
         config: StampConfig,
         location: LocationSnapshot?,
         detailedAddress: DetailedAddress?,
-        timeStr: String,
+        sensorSnapshot: SensorSnapshot,
+        weatherSnapshot: WeatherSnapshot,
+        timeStr: String?,
         coordStr: String?
     ) {
         val minDim = min(width, height).toFloat()
         val scale = max(1.0f, minDim / 1080f)
         val padding = 28f * scale
+        val maxTextWidth = width - (padding * 2)
+        val isRightAligned = config.position == StampPosition.TOP_RIGHT || config.position == StampPosition.BOTTOM_RIGHT
 
         val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
@@ -870,23 +1097,53 @@ object ImageProcessor {
             setShadowLayer(4f * scale, 2f * scale, 2f * scale, Color.BLACK)
         }
 
-        val lines = mutableListOf<String>()
-        if (config.showCustomTitle) lines.add(config.customTitle.uppercase())
-        if (coordStr != null) lines.add(coordStr)
-        lines.add(timeStr)
-        detailedAddress?.fullStreetAddress?.let { lines.add(it) }
+        val rawLines = mutableListOf<String>()
+        if (config.showCustomTitle && config.customTitle.isNotBlank()) rawLines.add(config.customTitle.uppercase())
+        if (coordStr != null) rawLines.add(coordStr)
+        val metaParts = mutableListOf<String>()
+        if (!timeStr.isNullOrBlank()) metaParts.add(timeStr)
+        if (config.showWeather) metaParts.add("${weatherSnapshot.weatherEmoji} ${weatherSnapshot.temperatureCelsius.toInt()}°C")
+        if (config.showCompass || config.showSensors) metaParts.add("🧭 ${sensorSnapshot.compassDegrees}° ${sensorSnapshot.compassDirection}")
+        if (metaParts.isNotEmpty()) rawLines.add(metaParts.joinToString(" • "))
+        if (config.showAddress && !detailedAddress?.fullStreetAddress.isNullOrBlank()) {
+            rawLines.add(detailedAddress!!.fullStreetAddress)
+        }
+        if (config.notes.isNotBlank()) rawLines.add(config.notes)
 
+        val lines = rawLines.flatMap { wrapText(it, fillPaint, maxTextWidth) }
+        if (lines.isEmpty()) return
+
+        val lineHeight = fillPaint.fontMetrics.descent - fillPaint.fontMetrics.ascent
         val lineSpacing = 8f * scale
+        val totalHeight = lines.size * (lineHeight + lineSpacing)
+
         var curY = if (config.position == StampPosition.TOP_LEFT || config.position == StampPosition.TOP_RIGHT) {
-            padding
+            padding - fillPaint.fontMetrics.ascent
         } else {
-            height - padding - (lines.size * (24f * scale))
+            height - padding - totalHeight - fillPaint.fontMetrics.ascent
         }
 
         for (line in lines) {
-            canvas.drawText(line, padding, curY, fillPaint)
-            curY += 24f * scale + lineSpacing
+            val x = if (isRightAligned) {
+                width - padding - fillPaint.measureText(line)
+            } else {
+                padding
+            }
+            canvas.drawText(line, x, curY, fillPaint)
+            curY += lineHeight + lineSpacing
         }
+    }
+
+    private fun ellipsizeText(text: String, paint: Paint, maxWidth: Float): String {
+        if (maxWidth <= 0f) return ""
+        if (paint.measureText(text) <= maxWidth) return text
+        val ellipsis = "…"
+        val ellipsisWidth = paint.measureText(ellipsis)
+        var end = text.length
+        while (end > 0 && paint.measureText(text, 0, end) + ellipsisWidth > maxWidth) {
+            end--
+        }
+        return if (end > 0) text.substring(0, end).trimEnd() + ellipsis else ""
     }
 
     private fun wrapText(text: String, paint: Paint, maxWidth: Float): List<String> {
@@ -916,6 +1173,7 @@ object ImageProcessor {
     private fun injectExifMetadata(
         jpegBytes: ByteArray,
         location: LocationSnapshot?,
+        address: String?,
         date: Date
     ): ByteArray {
         val tempFile = try {
@@ -928,6 +1186,11 @@ object ImageProcessor {
 
         try {
             val exif = ExifInterface(tempFile.absolutePath)
+
+            exif.setAttribute(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL.toString()
+            )
 
             val exifDateFormat = SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.US).apply {
                 timeZone = TimeZone.getDefault()
@@ -942,6 +1205,10 @@ object ImageProcessor {
                 if (location.altitudeMeters != null) {
                     exif.setAltitude(location.altitudeMeters)
                 }
+            }
+
+            if (!address.isNullOrBlank()) {
+                exif.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, address)
             }
 
             exif.setAttribute(ExifInterface.TAG_MAKE, "GPS Map Camera")

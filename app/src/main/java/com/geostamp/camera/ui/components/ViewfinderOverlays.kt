@@ -47,27 +47,29 @@ import kotlin.math.abs
 
 private val BrandYellow = Color(0xFFFFCC00)
 
-// 1. Aspect Ratio Framing Mask (Black bars when 1:1 or 16:9)
+// 1. Aspect Ratio Framing Mask (Black bars when 1:1, 4:3, or 16:9)
 @Composable
 fun AspectFramingMask(
     aspectRatio: AspectRatioOption,
     modifier: Modifier = Modifier
 ) {
-    if (aspectRatio == AspectRatioOption.RATIO_4_3) return
-
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val w = maxWidth
         val h = maxHeight
+        val isPortrait = h >= w
 
-        if (aspectRatio == AspectRatioOption.RATIO_1_1) {
-            // Square mask: top and bottom letterbox
-            val barH = (h - w) / 2f
-            if (barH > 0.dp) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.fillMaxWidth().height(barH).background(Color(0xD9000000)))
-                    Spacer(modifier = Modifier.weight(1f))
-                    Box(modifier = Modifier.fillMaxWidth().height(barH).background(Color(0xD9000000)))
-                }
+        val targetHeight = if (isPortrait) {
+            w * (aspectRatio.ratioX.toFloat() / aspectRatio.ratioY.toFloat())
+        } else {
+            w * (aspectRatio.ratioY.toFloat() / aspectRatio.ratioX.toFloat())
+        }
+
+        val barH = (h - targetHeight) / 2f
+        if (barH > 8.dp) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxWidth().height(barH).background(Color(0xBF000000)))
+                Spacer(modifier = Modifier.weight(1f))
+                Box(modifier = Modifier.fillMaxWidth().height(barH).background(Color(0xBF000000)))
             }
         }
     }

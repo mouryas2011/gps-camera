@@ -8,12 +8,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import androidx.core.content.FileProvider
+import androidx.exifinterface.media.ExifInterface
 import com.geostamp.camera.data.model.CapturedPhoto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,10 +29,18 @@ object MediaStoreHelper {
         longitude: Double?,
         address: String?,
         accuracy: Float?,
-        altitude: Double?
+        altitude: Double?,
+        folderName: String = "Default"
     ): CapturedPhoto = withContext(Dispatchers.IO) {
         val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
         val fileName = "GPS_IMG_${dateFormat.format(Date(timestamp))}.jpg"
+
+        val cleanFolder = folderName.trim().replace(Regex("[^a-zA-Z0-9 _-]"), "")
+        val relativeSubPath = if (cleanFolder.isBlank() || cleanFolder.equals("Default", ignoreCase = true)) {
+            "${Environment.DIRECTORY_PICTURES}/$ALBUM_NAME"
+        } else {
+            "${Environment.DIRECTORY_PICTURES}/$ALBUM_NAME/$cleanFolder"
+        }
 
         val resolver = context.contentResolver
         val contentValues = ContentValues().apply {
@@ -44,7 +50,7 @@ object MediaStoreHelper {
             put(MediaStore.Images.Media.DATE_TAKEN, timestamp)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/$ALBUM_NAME")
+                put(MediaStore.Images.Media.RELATIVE_PATH, relativeSubPath)
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }
@@ -141,20 +147,53 @@ object MediaStoreHelper {
                         memoryCache.find { it.id == id || it.displayName == name }
                     }
 
-                    photos.add(
-                        CapturedPhoto(
+                    val photo = if (cached != null) {
+                        cached.copy(id = id, uri = uri, size = size)
+                    } else {
+                        var exifLat: Double? = null
+                        var exifLon: Double? = null
+                        var exifAlt: Double? = null
+                        var exifAddr: String? = null
+                        try {
+                            resolver.openInputStream(uri)?.use { inputStream ->
+                                val exif = ExifInterface(inputStream)
+                                val latLong = exif.latLong
+                                if (latLong != null && latLong.size == 2) {
+                                    exifLat = latLong[0]
+                                    exifLon = latLong[1]
+                                }
+                                val alt = exif.getAltitude(Double.NaN)
+                                if (!alt.isNaN()) {
+                                    exifAlt = alt
+                                }
+                                exifAddr = exif.getAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION)
+                                    ?.takeIf { it.isNotBlank() }
+                            }
+                        } catch (_: Exception) {
+                            // Ignore EXIF read error
+                        }
+
+                        val loaded = CapturedPhoto(
                             id = id,
                             uri = uri,
                             displayName = name,
                             timestamp = dateTaken,
                             size = size,
-                            latitude = cached?.latitude,
-                            longitude = cached?.longitude,
-                            accuracy = cached?.accuracy,
-                            altitude = cached?.altitude,
-                            address = cached?.address
+                            latitude = exifLat,
+                            longitude = exifLon,
+                            accuracy = null,
+                            altitude = exifAlt,
+                            address = exifAddr
                         )
-                    )
+                        synchronized(memoryCache) {
+                            if (memoryCache.none { it.id == id }) {
+                                memoryCache.add(loaded)
+                            }
+                        }
+                        loaded
+                    }
+
+                    photos.add(photo)
                 }
             }
         } catch (_: Exception) {

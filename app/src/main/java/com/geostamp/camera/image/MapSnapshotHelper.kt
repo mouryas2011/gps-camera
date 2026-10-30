@@ -19,8 +19,8 @@ import kotlin.math.sin
 
 object MapSnapshotHelper {
 
-    // In-memory cache for map tiles
-    private val mapCache = mutableMapOf<String, Bitmap>()
+    // In-memory cache for raw map tiles (before heading overlay)
+    private val baseTileCache = mutableMapOf<String, Bitmap>()
 
     suspend fun getMapBitmap(
         latitude: Double,
@@ -28,24 +28,25 @@ object MapSnapshotHelper {
         headingDegrees: Int = 45,
         sizePx: Int = 320
     ): Bitmap = withContext(Dispatchers.IO) {
-        val cacheKey = String.format(Locale.US, "%.4f,%.4f", latitude, longitude)
-        synchronized(mapCache) {
-            mapCache[cacheKey]?.let { return@withContext it }
+        val tileKey = String.format(Locale.US, "%.4f,%.4f,%d", latitude, longitude, sizePx)
+        val cachedBase = synchronized(baseTileCache) {
+            baseTileCache[tileKey]?.takeIf { !it.isRecycled }
         }
 
-        // Try downloading static satellite / street tile
-        val downloaded = downloadStaticTile(latitude, longitude, sizePx)
-        val baseBitmap = downloaded ?: renderTacticalMap(latitude, longitude, sizePx)
-
-        // Overlay pin, field-of-view cone, and Google badge
-        val resultBitmap = overlayMapElements(baseBitmap, headingDegrees, sizePx)
-
-        synchronized(mapCache) {
-            if (mapCache.size > 20) mapCache.clear()
-            mapCache[cacheKey] = resultBitmap
+        val baseBitmap = if (cachedBase != null) {
+            cachedBase
+        } else {
+            val downloaded = downloadStaticTile(latitude, longitude, sizePx)
+            val rendered = downloaded ?: renderTacticalMap(latitude, longitude, sizePx)
+            synchronized(baseTileCache) {
+                if (baseTileCache.size > 20) baseTileCache.clear()
+                baseTileCache[tileKey] = rendered
+            }
+            rendered
         }
 
-        resultBitmap
+        // Overlay pin, field-of-view cone (for current heading), and badge on a fresh copy
+        overlayMapElements(baseBitmap, headingDegrees, sizePx)
     }
 
     private fun downloadStaticTile(latitude: Double, longitude: Double, sizePx: Int): Bitmap? {
@@ -66,23 +67,28 @@ object MapSnapshotHelper {
         )
 
         for (urlString in urls) {
+            var conn: HttpURLConnection? = null
             try {
                 val url = URL(urlString)
-                val conn = (url.openConnection() as HttpURLConnection).apply {
+                conn = (url.openConnection() as HttpURLConnection).apply {
                     connectTimeout = 3000
                     readTimeout = 3000
                     setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36")
                 }
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                    val stream: InputStream = conn.inputStream
-                    val bmp = BitmapFactory.decodeStream(stream)
-                    stream.close()
+                    val bmp = conn.inputStream.use { stream: InputStream ->
+                        BitmapFactory.decodeStream(stream)
+                    }
                     if (bmp != null) {
-                        return Bitmap.createScaledBitmap(bmp, sizePx, sizePx, true)
+                        val scaled = Bitmap.createScaledBitmap(bmp, sizePx, sizePx, true)
+                        if (scaled != bmp) bmp.recycle()
+                        return scaled
                     }
                 }
             } catch (_: Exception) {
                 // Try next url
+            } finally {
+                conn?.disconnect()
             }
         }
         return null
@@ -141,7 +147,7 @@ object MapSnapshotHelper {
     }
 
     private fun overlayMapElements(baseBitmap: Bitmap, headingDegrees: Int, sizePx: Int): Bitmap {
-        val result = if (baseBitmap.isMutable) baseBitmap else baseBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val result = baseBitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(result)
         val center = sizePx / 2f
 

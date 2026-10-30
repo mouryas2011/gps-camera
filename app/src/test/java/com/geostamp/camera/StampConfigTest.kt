@@ -5,6 +5,7 @@ import com.geostamp.camera.data.model.StampConfig
 import com.geostamp.camera.data.model.StampPosition
 import com.geostamp.camera.data.model.StampStyle
 import com.geostamp.camera.location.PlusCodeHelper
+import com.geostamp.camera.sensor.SensorHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -39,6 +40,16 @@ class StampConfigTest {
         val code = PlusCodeHelper.encode(22.374124, 82.735036)
         assertTrue("Should contain plus sign", code.contains("+"))
         assertTrue("Should be at least 8 characters", code.length >= 8)
+    }
+
+    @Test
+    fun testCardinalDirectionCalculation() {
+        assertEquals("N", SensorHelper.getCardinalDirection(0))
+        assertEquals("NE", SensorHelper.getCardinalDirection(45))
+        assertEquals("E", SensorHelper.getCardinalDirection(90))
+        assertEquals("S", SensorHelper.getCardinalDirection(180))
+        assertEquals("W", SensorHelper.getCardinalDirection(270))
+        assertEquals("N", SensorHelper.getCardinalDirection(359))
     }
 
     @Test

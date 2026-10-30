@@ -84,6 +84,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     val stampConfig: StateFlow<StampConfig> = settingsRepository.configFlow
 
     private var videoTimerJob: Job? = null
+    private var countdownJob: Job? = null
 
     init {
         sensorHelper.start()
@@ -153,7 +154,18 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             CameraSelector.LENS_FACING_BACK
         }
-        _uiState.value = _uiState.value.copy(lensFacing = next)
+        _uiState.value = _uiState.value.copy(
+            lensFacing = next,
+            isTorchOn = false,
+            zoomRatio = 1.0f
+        )
+    }
+
+    fun refreshRecentPhoto() {
+        viewModelScope.launch {
+            val photos = MediaStoreHelper.getCapturedPhotos(getApplication())
+            _uiState.value = _uiState.value.copy(lastPhoto = photos.firstOrNull())
+        }
     }
 
     fun cycleAspectRatio() {
@@ -298,14 +310,22 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     fun triggerCapture(context: Context, imageCapture: ImageCapture) {
         if (_uiState.value.isCapturing || _uiState.value.isSaving) return
 
+        if (countdownJob?.isActive == true) {
+            countdownJob?.cancel()
+            countdownJob = null
+            _uiState.value = _uiState.value.copy(countdownRemaining = null)
+            return
+        }
+
         val timer = _uiState.value.timerSeconds
         if (timer > 0) {
-            viewModelScope.launch {
+            countdownJob = viewModelScope.launch {
                 for (sec in timer downTo 1) {
                     _uiState.value = _uiState.value.copy(countdownRemaining = sec)
                     delay(1000)
                 }
                 _uiState.value = _uiState.value.copy(countdownRemaining = null)
+                countdownJob = null
                 capturePhoto(context, imageCapture)
             }
         } else {
@@ -413,6 +433,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
             // 4. Save to MediaStore
             val timestamp = System.currentTimeMillis()
+            val folder = _uiState.value.selectedFolder
             val savedPhoto = MediaStoreHelper.savePhoto(
                 context = context,
                 jpegBytes = processed.jpegBytes,
@@ -421,13 +442,14 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 longitude = freshLocation?.longitude,
                 address = detailed?.fullStreetAddress,
                 accuracy = freshLocation?.accuracyMeters,
-                altitude = freshLocation?.altitudeMeters
+                altitude = freshLocation?.altitudeMeters,
+                folderName = folder
             )
 
             _uiState.value = _uiState.value.copy(
                 isSaving = false,
                 lastPhoto = savedPhoto,
-                infoMessage = "Photo stamped & saved to ${_uiState.value.selectedFolder}"
+                infoMessage = "Photo stamped & saved to $folder"
             )
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
@@ -440,6 +462,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     override fun onCleared() {
         super.onCleared()
         videoTimerJob?.cancel()
+        countdownJob?.cancel()
         locationHelper.stopMonitoring()
         sensorHelper.stop()
     }
