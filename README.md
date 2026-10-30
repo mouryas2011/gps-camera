@@ -17,11 +17,12 @@ A modern, native Android camera application built with **Jetpack Compose**, **Ca
   - Live GPS pill indicator showing lock status and accuracy (`±4m Locked`, `Acquiring...`, `Offline`).
   - Never mislabels stale location data as fresh.
   - Reverse geocoding resolves readable street, locality, city, and country addresses (with graceful offline fallback).
-- **Customizable Watermark Engine**:
+- **Premium GPS Map Watermark Engine**:
   - Scalable vector rendering adapted to any camera resolution.
-  - **Styles**: Frosted Glass Badge, High-Contrast Dark Card, and Clean Drop-Shadow Outline.
-  - **Positions**: Bottom-Left, Bottom-Right, Top-Left, Top-Right.
-  - **Toggles**: Toggle Date/Time, Coordinates, Address, Accuracy, Altitude, or custom project title.
+  - **Reference layout**: Satellite map thumbnail with a red pin and blue accuracy circle on the left, semi-transparent charcoal info panel on the right.
+  - **Dynamic data**: City/state/country with flag, full street address, lat/long, capture-time timestamp with timezone, and a "Captured by" note.
+  - **Styles**: Classic Map Badge, Modern Minimal, Surveyor Grid, Frosted Glass, High-Contrast Dark, and Clean Outline.
+  - **Customization**: Position (4 corners), horizontal/vertical layout, watermark size, font size, font colour, background transparency, map on/off, and per-field toggles.
   - **Coordinate Formats**: Decimal Degrees (`37.774900° N, 122.419400° W`) and Degrees-Minutes-Seconds (DMS).
 - **EXIF Metadata Injection**:
   - Writes standard GPS tags (`TAG_GPS_LATITUDE`, `TAG_GPS_LONGITUDE`, `TAG_GPS_ALTITUDE`) and timestamps into the saved JPEG.

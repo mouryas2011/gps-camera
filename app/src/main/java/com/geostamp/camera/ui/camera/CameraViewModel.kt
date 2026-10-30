@@ -367,9 +367,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             executor,
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                    val capturedAtMillis = System.currentTimeMillis()
                     _uiState.value = _uiState.value.copy(isCapturing = false, isSaving = true)
                     viewModelScope.launch {
-                        processAndSaveCapturedImage(context, imageProxy)
+                        processAndSaveCapturedImage(context, imageProxy, capturedAtMillis)
                     }
                 }
 
@@ -383,7 +384,11 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
-    private suspend fun processAndSaveCapturedImage(context: Context, imageProxy: ImageProxy) {
+    private suspend fun processAndSaveCapturedImage(
+        context: Context,
+        imageProxy: ImageProxy,
+        capturedAtMillis: Long
+    ) {
         try {
             val buffer: ByteBuffer = imageProxy.planes[0].buffer
             val bytes = ByteArray(buffer.remaining())
@@ -427,7 +432,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                     weatherSnapshot = _uiState.value.weatherSnapshot,
                     mapBitmap = mapBitmap,
                     config = stampConfig.value,
-                    lensFacingFront = isFront
+                    lensFacingFront = isFront,
+                    captureTimestampMillis = capturedAtMillis
                 )
             }
 

@@ -151,11 +151,24 @@ object MapSnapshotHelper {
         val canvas = Canvas(result)
         val center = sizePx / 2f
 
-        // 1. Draw blue vision field cone emanating from center pin
-        val coneAngle = Math.toRadians((headingDegrees - 90).toDouble())
-        val spread = Math.toRadians(35.0)
-        val coneRadius = center * 0.75f
+        // 1. Draw Google Maps-style blue location accuracy circle around center
+        val accuracyRadius = sizePx * 0.24f
+        val accuracyFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(55, 66, 133, 244) // #4285F4 translucent
+            style = Paint.Style.FILL
+        }
+        val accuracyBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(190, 66, 133, 244)
+            style = Paint.Style.STROKE
+            strokeWidth = (sizePx * 0.01f).coerceAtLeast(1.8f)
+        }
+        canvas.drawCircle(center, center, accuracyRadius, accuracyFillPaint)
+        canvas.drawCircle(center, center, accuracyRadius, accuracyBorderPaint)
 
+        // Subtle directional heading cone inside accuracy circle
+        val coneAngle = Math.toRadians((headingDegrees - 90).toDouble())
+        val spread = Math.toRadians(30.0)
+        val coneRadius = accuracyRadius * 0.92f
         val conePath = Path().apply {
             moveTo(center, center)
             lineTo(
@@ -164,43 +177,89 @@ object MapSnapshotHelper {
             )
             arcTo(
                 RectF(center - coneRadius, center - coneRadius, center + coneRadius, center + coneRadius),
-                (headingDegrees - 90 - 35).toFloat(),
-                70f,
+                (headingDegrees - 90 - 30).toFloat(),
+                60f,
                 false
             )
             close()
         }
-
         val conePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(105, 41, 121, 255)
+            color = Color.argb(75, 66, 133, 244)
             style = Paint.Style.FILL
         }
         canvas.drawPath(conePath, conePaint)
 
-        // 2. Draw red location pin marker
-        val pinRadius = sizePx * 0.055f
-        val pinY = center
+        // 2. Draw Google Maps-style red teardrop location pin pointing to center
+        val pinHeadRadius = sizePx * 0.085f
+        val pinTipY = center
+        val pinHeadCenterY = pinTipY - (pinHeadRadius * 1.65f)
 
-        // Pin shadow
+        // Ground shadow at pin tip
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(90, 0, 0, 0)
+            color = Color.argb(110, 0, 0, 0)
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(center, pinY + pinRadius * 0.4f, pinRadius * 0.6f, shadowPaint)
+        canvas.drawOval(
+            RectF(
+                center - pinHeadRadius * 0.55f,
+                pinTipY - pinHeadRadius * 0.18f,
+                center + pinHeadRadius * 0.55f,
+                pinTipY + pinHeadRadius * 0.22f
+            ),
+            shadowPaint
+        )
 
-        // Pin head
+        // Teardrop pin path
+        val pinPath = Path().apply {
+            moveTo(center, pinTipY)
+            cubicTo(
+                center - pinHeadRadius * 0.45f,
+                pinTipY - pinHeadRadius * 0.65f,
+                center - pinHeadRadius,
+                pinHeadCenterY + pinHeadRadius * 0.45f,
+                center - pinHeadRadius,
+                pinHeadCenterY
+            )
+            arcTo(
+                RectF(
+                    center - pinHeadRadius,
+                    pinHeadCenterY - pinHeadRadius,
+                    center + pinHeadRadius,
+                    pinHeadCenterY + pinHeadRadius
+                ),
+                180f,
+                180f,
+                false
+            )
+            cubicTo(
+                center + pinHeadRadius,
+                pinHeadCenterY + pinHeadRadius * 0.45f,
+                center + pinHeadRadius * 0.45f,
+                pinTipY - pinHeadRadius * 0.65f,
+                center,
+                pinTipY
+            )
+            close()
+        }
+
         val pinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#E53935")
+            color = Color.parseColor("#EA4335")
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(center, pinY, pinRadius, pinPaint)
-
-        // White dot inside pin
-        val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        val pinStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = (sizePx * 0.008f).coerceAtLeast(1.4f)
+        }
+        canvas.drawPath(pinPath, pinPaint)
+        canvas.drawPath(pinPath, pinStrokePaint)
+
+        // Dark crimson inner circle inside pin head
+        val innerDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#8E1B13")
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(center, pinY, pinRadius * 0.45f, dotPaint)
+        canvas.drawCircle(center, pinHeadCenterY, pinHeadRadius * 0.42f, innerDotPaint)
 
         // 3. Draw "Google" watermark logo at bottom left
         val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

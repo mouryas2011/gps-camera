@@ -2,11 +2,18 @@ package com.geostamp.camera
 
 import com.geostamp.camera.data.model.CoordinateFormat
 import com.geostamp.camera.data.model.StampConfig
+import com.geostamp.camera.data.model.StampFontColor
+import com.geostamp.camera.data.model.StampFontSize
+import com.geostamp.camera.data.model.StampLayout
 import com.geostamp.camera.data.model.StampPosition
+import com.geostamp.camera.data.model.StampSize
 import com.geostamp.camera.data.model.StampStyle
 import com.geostamp.camera.location.PlusCodeHelper
 import com.geostamp.camera.sensor.SensorHelper
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -57,13 +64,38 @@ class StampConfigTest {
         val config = StampConfig()
         assertEquals(StampPosition.BOTTOM_RIGHT, config.position)
         assertEquals(StampStyle.CLASSIC_MAP_BADGE, config.style)
+        assertEquals(StampLayout.HORIZONTAL, config.layout)
+        assertEquals(StampSize.MEDIUM, config.stampSize)
+        assertEquals(StampFontSize.MEDIUM, config.fontSize)
+        assertEquals(StampFontColor.WHITE, config.fontColor)
         assertTrue(config.showDateTime)
         assertTrue(config.showCoordinates)
         assertTrue(config.showAddress)
-        assertTrue(config.showAccuracy)
-        assertTrue(config.showAltitude)
+        assertFalse(config.showAccuracy)
+        assertFalse(config.showAltitude)
         assertTrue(config.showMapSnapshot)
-        assertTrue(config.showWeather)
+        assertFalse(config.showWeather)
+        assertTrue(config.showCapturedByNote)
         assertEquals("GeoStamp Camera", config.customTitle)
+    }
+
+    @Test
+    fun testCapturedByNoteLine() {
+        val config = StampConfig()
+        val note = StampConfig.noteLine(config)
+        assertNotNull(note)
+        assertEquals("Note: Captured by GeoStamp Camera", note)
+
+        assertNull(StampConfig.noteLine(config.copy(showCapturedByNote = false)))
+
+        val custom = StampConfig.noteLine(config.copy(notes = "Site inspection"))
+        assertEquals("Note: Site inspection", custom)
+    }
+
+    @Test
+    fun testDateTimeFormattingUsesOffset() {
+        val formatted = StampConfig.formatDateTime(1790000000000L, StampConfig().dateTimePattern)
+        assertTrue("Should include GMT label", formatted.contains("GMT"))
+        assertTrue("Should include a timezone offset", formatted.contains("+") || formatted.contains("-"))
     }
 }
