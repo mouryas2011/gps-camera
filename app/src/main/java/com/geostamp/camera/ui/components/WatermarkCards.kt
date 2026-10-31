@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -332,7 +333,12 @@ fun ClassicMapWatermarkCard(
         if (isVertical) {
             Column {
                 if (config.showMapSnapshot) {
-                    mapContent(Modifier.fillMaxWidth().height(mapSize))
+                    // Full-width banner with a 16:9 photo-like ratio (matches the saved image).
+                    mapContent(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                    )
                     Spacer(modifier = Modifier.height(6.dp))
                 }
                 infoContent(Modifier.fillMaxWidth())

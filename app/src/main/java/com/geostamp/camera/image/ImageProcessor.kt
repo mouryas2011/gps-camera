@@ -330,7 +330,15 @@ object ImageProcessor {
             .coerceAtMost(width - padding * 2)
         val hasMap = config.showMapSnapshot && mapBitmap != null && !mapBitmap.isRecycled
         val isVertical = config.layout == StampLayout.VERTICAL
-        val mapSize = if (hasMap) 160f * baseScale * sizeScale else 0f
+        val innerWidth = cardWidth - innerPad * 2
+        // Horizontal: the map is a square thumbnail sized as a proportion of the card
+        // width (≈22%), matching the live preview card.
+        // Vertical: the map spans the full inner width and keeps a 16:9 photo-like ratio.
+        val mapSize = if (hasMap) {
+            if (isVertical) innerWidth * 0.5625f else (cardWidth * 0.22f).coerceAtMost(260f * baseScale)
+        } else {
+            0f
+        }
 
         val primaryColor = try {
             Color.parseColor(config.fontColor.hex)
@@ -502,6 +510,9 @@ object ImageProcessor {
                 )
                 drawRoundedBitmap(canvas, mapBitmap!!, mapRect, 8f * baseScale)
                 textLeft = mapRect.right + gap
+                // Vertically centre the text block against the map so both sections
+                // share one optical centre line (matches the live preview card).
+                textTop = cardTop + (cardHeight - textHeight) / 2f
             }
         }
 
